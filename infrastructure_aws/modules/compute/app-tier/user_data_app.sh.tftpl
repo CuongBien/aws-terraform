@@ -1,0 +1,156 @@
+#!/bin/bash
+set -xeuo pipefail
+
+# ========= Inputs from Terraform =========
+DB_HOST="${db_host}"
+DB_USER="${db_username}"
+DB_PASS="${db_password}"
+DB_NAME="${db_name}"
+PROJECT="${project_name}"
+SHOP_URL="${shop_url}"   # ví dụ: http://<public-alb-dns>/
+ENVIRONMENT="${environment}"
+
+log(){ echo "[user-data] $*"; }
+
+# ========= 1) Start httpd (AMI đã cài sẵn) =========
+sudo systemctl enable --now httpd || true
+
+# Healthcheck file
+echo "ok" | sudo tee /var/www/html/health.txt >/dev/null
+sudo chown apache:apache /var/www/html/health.txt
+sudo chmod 644 /var/www/html/health.txt
+
+
+# ========= 2) Quyền & SELinux (an toàn) =========
+sudo chown -R apache:apache /var/www/html || true
+sudo chown -R apache:apache /var/www/storage || true
+sudo chmod -R 755 /var/www/html || true
+sudo restorecon -Rv /var/www/html /var/www/storage || true
+
+# ========= 3) Ghi THẲNG /var/www/html/config.php (storefront) =========
+sudo tee /var/www/html/config.php >/dev/null <<PHP
+<?php
+// HTTP
+define('HTTP_SERVER', '${shop_url}');
+// HTTPS
+define('HTTPS_SERVER', '${shop_url}');
+
+// DIR
+define('DIR_APPLICATION', '/var/www/html/catalog/');
+define('DIR_SYSTEM',      '/var/www/html/system/');
+define('DIR_IMAGE',       '/var/www/html/image/');
+define('DIR_STORAGE',     '/var/www/storage/');
+define('DIR_CATALOG',     '/var/www/html/');
+
+define('DIR_LANGUAGE',    DIR_APPLICATION . 'language/');
+define('DIR_TEMPLATE',    DIR_APPLICATION . 'view/theme/');
+define('DIR_CONFIG',      DIR_SYSTEM . 'config/');
+define('DIR_CACHE',       DIR_STORAGE . 'cache/');
+define('DIR_DOWNLOAD',    DIR_STORAGE . 'download/');
+define('DIR_LOGS',        DIR_STORAGE . 'logs/');
+define('DIR_MODIFICATION',DIR_STORAGE . 'modification/');
+define('DIR_SESSION',     DIR_STORAGE . 'session/');
+define('DIR_UPLOAD',      DIR_STORAGE . 'upload/');
+
+// DB
+define('DB_DRIVER',   'mysqli');
+define('DB_HOSTNAME', '${db_host}');
+define('DB_USERNAME', '${db_username}');
+define('DB_PASSWORD', '${db_password}');
+define('DB_DATABASE', '${db_name}');
+define('DB_PORT',     '3306');
+define('DB_PREFIX',   'oc_');
+PHP
+
+# ========= 4) Ghi THẲNG /var/www/html/admin/config.php (admin) =========
+sudo tee /var/www/html/admin/config.php >/dev/null <<PHP
+<?php
+// HTTP
+define('HTTP_SERVER',  '${shop_url}admin/');
+define('HTTP_CATALOG', '${shop_url}');
+// HTTPS
+define('HTTPS_SERVER',  '${shop_url}admin/');
+define('HTTPS_CATALOG', '${shop_url}');
+
+// DIR
+define('DIR_APPLICATION', '/var/www/html/admin/');
+define('DIR_SYSTEM',      '/var/www/html/system/');
+define('DIR_IMAGE',       '/var/www/html/image/');
+define('DIR_STORAGE',     '/var/www/storage/');
+define('DIR_CATALOG',     '/var/www/html/');
+
+define('DIR_LANGUAGE',    DIR_APPLICATION . 'language/');
+define('DIR_TEMPLATE',    DIR_APPLICATION . 'view/template/');
+define('DIR_CONFIG',      DIR_SYSTEM . 'config/');
+define('DIR_CACHE',       DIR_STORAGE . 'cache/');
+define('DIR_DOWNLOAD',    DIR_STORAGE . 'download/');
+define('DIR_LOGS',        DIR_STORAGE . 'logs/');
+define('DIR_MODIFICATION',DIR_STORAGE . 'modification/');
+define('DIR_SESSION',     DIR_STORAGE . 'session/');
+define('DIR_UPLOAD',      DIR_STORAGE . 'upload/');
+
+// DB
+define('DB_DRIVER',   'mysqli');
+define('DB_HOSTNAME', '${db_host}');
+define('DB_USERNAME', '${db_username}');
+define('DB_PASSWORD', '${db_password}');
+define('DB_DATABASE', '${db_name}');
+define('DB_PORT',     '3306');
+define('DB_PREFIX',   'oc_');
+PHP
+
+# ========= 5) Quyền các file config =========
+sudo chown apache:apache /var/www/html/config.php /var/www/html/admin/config.php
+sudo chmod 644 /var/www/html/config.php /var/www/html/admin/config.php
+sudo restorecon -v /var/www/html/config.php /var/www/html/admin/config.php || true
+log "Wrote OpenCart configs"
+
+# ========= 6) Tạo DB + import schema nếu DB trống (lần đầu) =========
+MYSQL=$(command -v mysql || command -v mariadb || true)
+if [ -n "$MYSQL" ]; then
+  "$MYSQL" -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" \
+    -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+  T=$("$MYSQL" -N -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" \
+    -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" || echo 0)
+
+  if [ "$T" = "0" ] && [ -f /var/www/html/install/opencart.sql ]; then
+    "$MYSQL" -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < /var/www/html/install/opencart.sql || true
+    log "Imported OpenCart schema into $DB_NAME"
+  else
+    log "Skip import (tables=$T or no SQL)"
+  fi
+else
+  log "No mysql/mariadb client found; skip DB init"
+fi
+
+# ========= 7) XÓA installer để tránh bị chặn =========
+sudo rm -rf /var/www/html/install || true
+
+# ========= 8) CloudWatch Agent (đẩy log Apache) =========
+if [ -x /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
+  ACCESS_LOG="/var/log/httpd/access_log"
+  ERROR_LOG="/var/www/log/httpd/error_log"
+  # AL2023 path mặc định error là /var/log/httpd/error_log:
+  if [ -f /var/log/httpd/error_log ]; then ERROR_LOG="/var/log/httpd/error_log"; fi
+
+  sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+  cat >/tmp/cw.json <<JSON
+{
+  "agent": { "run_as_user": "root" },
+  "logs": { "logs_collected": { "files": { "collect_list": [
+    { "file_path": "$ACCESS_LOG", "log_group_name": "$PROJECT-app-$ENVIRONMENT-access", "log_stream_name": "{instance_id}" },
+    { "file_path": "$ERROR_LOG",  "log_group_name": "$PROJECT-app-$ENVIRONMENT-error",  "log_stream_name": "{instance_id}" }
+  ]}}}
+}
+JSON
+  sudo mv /tmp/cw.json /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+  log "CloudWatch Agent configured"
+fi
+
+# ========= 9) Reload Apache =========
+sudo systemctl reload httpd || true
+
+log "User-data completed for OpenCart"
