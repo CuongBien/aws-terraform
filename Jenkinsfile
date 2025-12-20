@@ -95,7 +95,7 @@ pipeline {
                           VAR_ID=\$(curl -s \
                             -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
                             https://app.terraform.io/api/v2/workspaces/\$WORKSPACE_ID/vars \
-                            | jq -r ".data[] | select(.attributes.key==\\"$KEY\\") | .id")
+                            | jq -r ".data[] | select(.attributes.key==\\"\$KEY\\") | .id")
 
                           if [ -z "\$VAR_ID" ]; then
                             echo "Variable \$KEY not found"
