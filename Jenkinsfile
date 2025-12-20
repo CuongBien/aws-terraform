@@ -173,47 +173,47 @@ pipeline {
                     sh """
                     set -e
 
-                    WORKSPACE_ID=\$(curl -s \
-                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
-                      https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE} \
-                      | jq -r '.data.id')
+                    WORKSPACE_ID=\$(curl -s \\
+                    -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \\
+                    https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE} \\
+                    | jq -r '.data.id')
 
-                    RUN_ID=\$(curl -s -X POST \
-                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
-                      -H "Content-Type: application/vnd.api+json" \
-                      -d '{
+                    RUN_ID=\$(curl -s -X POST \\
+                    -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \\
+                    -H "Content-Type: application/vnd.api+json" \\
+                    -d '{
                         "data": {
-                          "type": "runs",
-                          "attributes": {
+                        "type": "runs",
+                        "attributes": {
                             "message": "Deploy ${params.DEPLOYMENT_TARGET} ${params.TRAFFIC_SPLIT} (${env.GIT_COMMIT_SHORT})"
-                          },
-                          "relationships": {
+                        },
+                        "relationships": {
                             "workspace": {
-                              "data": {
+                            "data": {
                                 "type": "workspaces",
                                 "id": "'\$WORKSPACE_ID'"
-                              }
                             }
-                          }
+                            }
                         }
-                      }' \
-                      https://app.terraform.io/api/v2/runs \
-                      | jq -r '.data.id')
+                        }
+                    }' \\
+                    https://app.terraform.io/api/v2/runs \\
+                    | jq -r '.data.id')
 
                     echo "Terraform run \$RUN_ID"
 
                     while true; do
-                      STATUS=\$(curl -s \
-                        -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
-                        https://app.terraform.io/api/v2/runs/\$RUN_ID \
+                    STATUS=\$(curl -s \\
+                        -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \\
+                        https://app.terraform.io/api/v2/runs/\$RUN_ID \\
                         | jq -r '.data.attributes.status')
 
-                      echo "Terraform status: \$STATUS"
+                    echo "Terraform status: \$STATUS"
 
-                      if [[ "\$STATUS" == "applied" ]]; then exit 0; fi
-                      if [[ "\$STATUS" == "errored" || "\$STATUS" == "canceled" ]]; then exit 1; fi
+                    if [ "\$STATUS" = "applied" ]; then exit 0; fi
+                    if [ "\$STATUS" = "errored" ] || [ "\$STATUS" = "canceled" ]; then exit 1; fi
 
-                      sleep 15
+                    sleep 15
                     done
                     """
                 }
