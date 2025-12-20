@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     docker.io \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Packer 1.10.0
