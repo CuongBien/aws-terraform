@@ -91,7 +91,7 @@ resource "aws_lb_listener" "http" {
       }
 
       stickiness {
-        enabled  = true
+        enabled  = false
         duration = 3600
       }
     }
