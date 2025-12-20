@@ -32,7 +32,7 @@ module "security" {
 
   project_name = var.project_name
   vpc_id       = module.networking.vpc_id
-  vpc_cidr     = module.networking.vpc_cidr_block
+  vpc_cidr     = module.networking.vpc_cidr
 
   # Bastion access configuration
   bastion_allowed_cidrs = var.bastion_allowed_cidrs
@@ -179,7 +179,7 @@ module "nacl" {
   private_web_subnet_ids = module.networking.private_web_subnet_ids
   private_app_subnet_ids = module.networking.private_app_subnet_ids
   private_db_subnet_ids  = module.networking.private_db_subnet_ids
-  vpc_cidr_block         = module.networking.vpc_cidr_block
+  vpc_cidr_block         = module.networking.vpc_cidr
 
   public_subnet_cidrs      = var.public_subnet_cidrs
   web_private_subnet_cidrs = local.web_subnet_cidrs
