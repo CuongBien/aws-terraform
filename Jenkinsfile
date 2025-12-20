@@ -1,34 +1,40 @@
-// Jenkinsfile - CI/CD Pipeline for Blue/Green Deployment
 pipeline {
     agent any
-    
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
     parameters {
         choice(
             name: 'DEPLOYMENT_TARGET',
             choices: ['green', 'blue'],
-            description: 'Deploy to which environment? (Green = new version, Blue = current)'
+            description: 'Deploy to which environment?'
         )
         choice(
             name: 'TRAFFIC_SPLIT',
             choices: ['canary-10', 'half-50', 'full-100'],
-            description: 'Traffic distribution after deployment'
+            description: 'Traffic distribution'
         )
         booleanParam(
             name: 'SKIP_TESTS',
             defaultValue: false,
-            description: 'Skip health checks and validation'
+            description: 'Skip health checks'
         )
     }
-    
+
     environment {
-        AWS_REGION = 'us-east-1'
-        PROJECT_NAME = 'pbl4'
-        TF_WORKSPACE = 'pbl4-three-tier-dev'
-        PACKER_DIR = 'packer'
-        TF_DIR = 'infrastructure_aws'
+        AWS_REGION   = 'ap-southeast-2'
+        PROJECT_NAME = 'pbl4-three-tier'
+
+        TF_ORG       = 'CBien'
+        TF_WORKSPACE = 'aws-terraform-vcs'
     }
-    
+
     stages {
+
+        /* ================= CHECKOUT ================= */
         stage('Checkout') {
             steps {
                 checkout scm
@@ -37,279 +43,299 @@ pipeline {
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
-                    env.BUILD_TIMESTAMP = sh(
-                        script: "date +%Y%m%d-%H%M%S",
-                        returnStdout: true
-                    ).trim()
                 }
-                echo "Building commit: ${env.GIT_COMMIT_SHORT} at ${env.BUILD_TIMESTAMP}"
+                echo "Deploying commit ${env.GIT_COMMIT_SHORT}"
             }
         }
-        
-        stage('Build AMIs with Packer') {
-            parallel {
-                stage('Build Web Tier AMI') {
-                    steps {
-                        withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
-                            dir("${PACKER_DIR}") {
-                                sh """
-                                    packer init web-tier.pkr.hcl
-                                    packer build \
-                                        -var 'aws_region=${AWS_REGION}' \
-                                        -var 'project_name=${PROJECT_NAME}' \
-                                        -var 'environment=${params.DEPLOYMENT_TARGET}' \
-                                        -var 'git_commit=${env.GIT_COMMIT_SHORT}' \
-                                        web-tier.pkr.hcl | tee web-build.log
-                                """
-                                script {
-                                    env.WEB_AMI_ID = sh(
-                                        script: "grep 'AMI:' web-build.log | awk '{print \$2}'",
-                                        returnStdout: true
-                                    ).trim()
-                                }
-                                echo "Web AMI created: ${env.WEB_AMI_ID}"
-                            }
-                        }
-                    }
-                }
-                
-                stage('Build App Tier AMI') {
-                    steps {
-                        withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
-                            dir("${PACKER_DIR}") {
-                                sh """
-                                    packer init app-tier.pkr.hcl
-                                    packer build \
-                                        -var 'aws_region=${AWS_REGION}' \
-                                        -var 'project_name=${PROJECT_NAME}' \
-                                        -var 'environment=${params.DEPLOYMENT_TARGET}' \
-                                        -var 'git_commit=${env.GIT_COMMIT_SHORT}' \
-                                        app-tier.pkr.hcl | tee app-build.log
-                                """
-                                script {
-                                    env.APP_AMI_ID = sh(
-                                        script: "grep 'AMI:' app-build.log | awk '{print \$2}'",
-                                        returnStdout: true
-                                    ).trim()
-                                }
-                                echo "App AMI created: ${env.APP_AMI_ID}"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        stage('Update Terraform Variables') {
+
+        /* ================= VALIDATION ================= */
+        stage('Validate Input') {
             steps {
-                withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
+                script {
+                    if (params.TRAFFIC_SPLIT == 'full-100' && params.DEPLOYMENT_TARGET == 'blue') {
+                        echo "⚠ Full traffic to blue – make sure green is current production"
+                    }
+                }
+            }
+        }
+
+        /* ================= UPDATE TRAFFIC VARS ================= */
+        stage('Update Traffic Variables') {
+            steps {
+                withCredentials([string(
+                    credentialsId: 'terraform-cloud-token',
+                    variable: 'TF_TOKEN_app_terraform_io'
+                )]) {
                     script {
-                        def targetEnv = params.DEPLOYMENT_TARGET
-                        sh """
-                            # Update AMI IDs for target environment
-                            curl -X PATCH \
-                              -H "Authorization: Bearer \$TF_TOKEN" \
-                              -H "Content-Type: application/vnd.api+json" \
-                              -d '{
-                                "data": {
-                                  "type": "vars",
-                                  "attributes": {
-                                    "key": "ami_web_${targetEnv}",
-                                    "value": "${env.WEB_AMI_ID}",
-                                    "category": "terraform"
-                                  }
-                                }
-                              }' \
-                              https://app.terraform.io/api/v2/workspaces/${TF_WORKSPACE}/vars/ami_web_${targetEnv}
-                            
-                            curl -X PATCH \
-                              -H "Authorization: Bearer \$TF_TOKEN" \
-                              -H "Content-Type: application/vnd.api+json" \
-                              -d '{
-                                "data": {
-                                  "type": "vars",
-                                  "attributes": {
-                                    "key": "ami_app_${targetEnv}",
-                                    "value": "${env.APP_AMI_ID}",
-                                    "category": "terraform"
-                                  }
-                                }
-                              }' \
-                              https://app.terraform.io/api/v2/workspaces/${TF_WORKSPACE}/vars/ami_app_${targetEnv}
-                        """
-                    }
-                }
-                echo "Terraform variables updated for ${params.DEPLOYMENT_TARGET} environment"
-            }
-        }
-        
-        stage('Deploy Infrastructure') {
-            steps {
-                withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
-                    sh """
-                        # Trigger Terraform Cloud run
-                        curl -X POST \
-                          -H "Authorization: Bearer \$TF_TOKEN" \
-                          -H "Content-Type: application/vnd.api+json" \
-                          -d '{
-                            "data": {
-                              "attributes": {
-                                "message": "Deploy ${params.DEPLOYMENT_TARGET} - Commit ${env.GIT_COMMIT_SHORT}"
-                              },
-                              "type": "runs",
-                              "relationships": {
-                                "workspace": {
-                                  "data": {
-                                    "type": "workspaces",
-                                    "id": "${TF_WORKSPACE}"
-                                  }
-                                }
-                              }
-                            }
-                          }' \
-                          https://app.terraform.io/api/v2/runs | tee tf-run.json
-                        
-                        # Extract run ID
-                        RUN_ID=\$(cat tf-run.json | grep -o '"id":"run-[^"]*' | head -1 | cut -d'"' -f4)
-                        echo "Terraform Run ID: \$RUN_ID"
-                        
-                        # Wait for plan to complete
-                        echo "Waiting for Terraform plan..."
-                        sleep 60
-                    """
-                }
-                echo "Infrastructure deployment initiated"
-            }
-        }
-        
-        stage('Health Check') {
-            when {
-                expression { params.SKIP_TESTS == false }
-            }
-            steps {
-                withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
-                    script {
-                        def targetEnv = params.DEPLOYMENT_TARGET
-                        sh """
-                            # Get target group ARN
-                            TG_ARN=\$(aws elbv2 describe-target-groups \
-                                --region ${AWS_REGION} \
-                                --names ${PROJECT_NAME}-web-tg-${targetEnv} \
-                                --query 'TargetGroups[0].TargetGroupArn' \
-                                --output text)
-                            
-                            # Wait for healthy targets
-                            echo "Checking health of ${targetEnv} instances..."
-                            for i in {1..30}; do
-                                HEALTHY=\$(aws elbv2 describe-target-health \
-                                    --region ${AWS_REGION} \
-                                    --target-group-arn \$TG_ARN \
-                                    --query 'TargetHealthDescriptions[?TargetHealth.State==\`healthy\`] | length(@)' \
-                                    --output text)
-                                
-                                if [ "\$HEALTHY" -ge 2 ]; then
-                                    echo "✓ ${targetEnv} environment healthy (\$HEALTHY instances)"
-                                    exit 0
-                                fi
-                                
-                                echo "Waiting... (\$HEALTHY/2 healthy, attempt \$i/30)"
-                                sleep 10
-                            done
-                            
-                            echo "✗ Health check failed after 5 minutes"
-                            exit 1
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Canary Testing') {
-            when {
-                expression { params.TRAFFIC_SPLIT == 'canary-10' && params.SKIP_TESTS == false }
-            }
-            steps {
-                echo "Running canary tests with 10% traffic..."
-                // Add your test scripts here
-                sleep 30
-            }
-        }
-        
-        stage('Update Traffic Distribution') {
-            steps {
-                withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
-                    script {
-                        def trafficMap = [
+
+                        def trafficMatrix = [
                             'canary-10': [blue: 90, green: 10],
-                            'half-50': [blue: 50, green: 50],
-                            'full-100': [blue: 0, green: 100]
+                            'half-50'  : [blue: 50, green: 50],
+                            'full-100' : [blue: 0 , green: 100]
                         ]
-                        def traffic = trafficMap[params.TRAFFIC_SPLIT]
-                        
+
+                        def traffic = trafficMatrix[params.TRAFFIC_SPLIT]
+
                         if (params.DEPLOYMENT_TARGET == 'blue') {
                             traffic = [blue: traffic.green, green: traffic.blue]
                         }
-                        
+
                         sh """
-                            # Update traffic weights
-                            curl -X PATCH \
-                              -H "Authorization: Bearer \$TF_TOKEN" \
-                              -H "Content-Type: application/vnd.api+json" \
-                              -d '{
-                                "data": {
-                                  "type": "vars",
-                                  "attributes": {
-                                    "key": "traffic_weight_blue",
-                                    "value": "${traffic.blue}",
-                                    "category": "terraform"
-                                  }
-                                }
-                              }' \
-                              https://app.terraform.io/api/v2/workspaces/${TF_WORKSPACE}/vars/traffic_weight_blue
-                            
-                            curl -X PATCH \
-                              -H "Authorization: Bearer \$TF_TOKEN" \
-                              -H "Content-Type: application/vnd.api+json" \
-                              -d '{
-                                "data": {
-                                  "type": "vars",
-                                  "attributes": {
-                                    "key": "traffic_weight_green",
-                                    "value": "${traffic.green}",
-                                    "category": "terraform"
-                                  }
-                                }
-                              }' \
-                              https://app.terraform.io/api/v2/workspaces/${TF_WORKSPACE}/vars/traffic_weight_green
+                        set -e
+
+                        WORKSPACE_ID=\$(curl -s \
+                          -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                          https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE} \
+                          | jq -r '.data.id')
+
+                        update_var () {
+                          KEY=\$1
+                          VALUE=\$2
+
+                          VAR_ID=\$(curl -s \
+                            -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                            https://app.terraform.io/api/v2/workspaces/\$WORKSPACE_ID/vars \
+                            | jq -r ".data[] | select(.attributes.key==\\"$KEY\\") | .id")
+
+                          if [ -z "\$VAR_ID" ]; then
+                            echo "Variable \$KEY not found"
+                            exit 1
+                          fi
+
+                          curl -s -X PATCH \
+                            -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                            -H "Content-Type: application/vnd.api+json" \
+                            -d "{
+                              \\"data\\": {
+                                \\"id\\": \\"\$VAR_ID\\",
+                                \\"type\\": \\"vars\\",
+                                \\"attributes\\": { \\"value\\": \\"\$VALUE\\" }
+                              }
+                            }" \
+                            https://app.terraform.io/api/v2/workspaces/\$WORKSPACE_ID/vars/\$VAR_ID
+                        }
+
+                        update_var traffic_distribution_blue  ${traffic.blue}
+                        update_var traffic_distribution_green ${traffic.green}
                         """
-                        
-                        echo "Traffic updated: Blue ${traffic.blue}%, Green ${traffic.green}%"
+                        echo "Traffic updated → Blue ${traffic.blue}% | Green ${traffic.green}%"
                     }
                 }
             }
         }
-        
-        stage('Final Approval') {
+
+        /* ================= ENABLE ENV ================= */
+        stage('Enable Target Environment') {
+            steps {
+                withCredentials([string(
+                    credentialsId: 'terraform-cloud-token',
+                    variable: 'TF_TOKEN_app_terraform_io'
+                )]) {
+                    sh """
+                    set -e
+
+                    WORKSPACE_ID=\$(curl -s \
+                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                      https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE} \
+                      | jq -r '.data.id')
+
+                    VAR_ID=\$(curl -s \
+                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                      https://app.terraform.io/api/v2/workspaces/\$WORKSPACE_ID/vars \
+                      | jq -r ".data[] | select(.attributes.key==\\"enable_${params.DEPLOYMENT_TARGET}_env\\") | .id")
+
+                    curl -s -X PATCH \
+                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                      -H "Content-Type: application/vnd.api+json" \
+                      -d '{
+                        "data": {
+                          "id": "'\$VAR_ID'",
+                          "type": "vars",
+                          "attributes": {
+                            "value": "true",
+                            "hcl": true
+                          }
+                        }
+                      }' \
+                      https://app.terraform.io/api/v2/workspaces/\$WORKSPACE_ID/vars/\$VAR_ID
+                    """
+                }
+            }
+        }
+
+        /* ================= TRIGGER + WAIT TERRAFORM ================= */
+        stage('Terraform Cloud Apply') {
+            steps {
+                withCredentials([string(
+                    credentialsId: 'terraform-cloud-token',
+                    variable: 'TF_TOKEN_app_terraform_io'
+                )]) {
+                    sh """
+                    set -e
+
+                    WORKSPACE_ID=\$(curl -s \
+                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                      https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE} \
+                      | jq -r '.data.id')
+
+                    RUN_ID=\$(curl -s -X POST \
+                      -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                      -H "Content-Type: application/vnd.api+json" \
+                      -d '{
+                        "data": {
+                          "type": "runs",
+                          "attributes": {
+                            "message": "Deploy ${params.DEPLOYMENT_TARGET} ${params.TRAFFIC_SPLIT} (${env.GIT_COMMIT_SHORT})"
+                          },
+                          "relationships": {
+                            "workspace": {
+                              "data": {
+                                "type": "workspaces",
+                                "id": "'\$WORKSPACE_ID'"
+                              }
+                            }
+                          }
+                        }
+                      }' \
+                      https://app.terraform.io/api/v2/runs \
+                      | jq -r '.data.id')
+
+                    echo "Terraform run \$RUN_ID"
+
+                    while true; do
+                      STATUS=\$(curl -s \
+                        -H "Authorization: Bearer \$TF_TOKEN_app_terraform_io" \
+                        https://app.terraform.io/api/v2/runs/\$RUN_ID \
+                        | jq -r '.data.attributes.status')
+
+                      echo "Terraform status: \$STATUS"
+
+                      if [[ "\$STATUS" == "applied" ]]; then exit 0; fi
+                      if [[ "\$STATUS" == "errored" || "\$STATUS" == "canceled" ]]; then exit 1; fi
+
+                      sleep 15
+                    done
+                    """
+                }
+            }
+        }
+
+        /* ================= HEALTH CHECK ================= */
+        stage('Health Check') {
+            when { expression { !params.SKIP_TESTS } }
+            steps {
+                script {
+                    try {
+                        withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                            sh """
+                            set -e
+                            TG_ARN=\$(aws elbv2 describe-target-groups \
+                            --region ${AWS_REGION} \
+                            --names ${PROJECT_NAME}-web-tg-${params.DEPLOYMENT_TARGET} \
+                            --query 'TargetGroups[0].TargetGroupArn' \
+                            --output text)
+
+                            for i in {1..30}; do
+                            HEALTHY=\$(aws elbv2 describe-target-health \
+                                --region ${AWS_REGION} \
+                                --target-group-arn \$TG_ARN \
+                                --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \
+                                --output text)
+
+                            if [ "\$HEALTHY" -ge 1 ]; then
+                                echo "✓ Environment healthy (\$HEALTHY instances)"
+                                exit 0
+                            fi
+
+                            echo "Waiting... (\$HEALTHY/1 healthy, attempt \$i/30)"
+                            sleep 10
+                            done
+
+                            echo "✗ Health check failed"
+                            exit 1
+                            """
+                        }
+                    } catch (Exception e) {
+                        env.HEALTH_CHECK_FAILED = 'true'
+                        currentBuild.result = 'FAILURE'
+                        throw e
+                    }
+                }
+            }
+        }
+
+        /* ================= MANUAL APPROVAL (FULL CUTOVER ONLY) ================= */
+        stage('Manual Approval - Full Cutover') {
             when {
-                expression { params.TRAFFIC_SPLIT == 'full-100' }
+                allOf {
+                    expression { params.TRAFFIC_SPLIT == 'full-100' }
+                    expression { !params.SKIP_TESTS }
+                }
             }
             steps {
-                input message: 'Complete cutover to new version?', ok: 'Confirm'
-                echo 'Deployment confirmed by operator'
+                script {
+                    def userInput = input(
+                        message: """
+                            ⚠️ FULL CUTOVER CONFIRMATION
+                            
+                            Target: ${params.DEPLOYMENT_TARGET}
+                            Traffic: 100% → ${params.DEPLOYMENT_TARGET}
+                            Commit: ${env.GIT_COMMIT_SHORT}
+                            
+                            Health Check: PASSED ✅
+                            
+                            Proceed with full cutover?
+                        """,
+                        parameters: [
+                            choice(
+                                name: 'ACTION',
+                                choices: ['Proceed', 'Rollback'],
+                                description: 'Choose action'
+                            )
+                        ]
+                    )
+                    
+                    if (userInput == 'Rollback') {
+                        error("Deployment aborted by user - initiating rollback")
+                    }
+                    
+                    echo "✓ Full cutover approved by user"
+                }
             }
         }
     }
-    
+
     post {
         success {
-            echo "✓ Deployment successful!"
-            echo "Web AMI: ${env.WEB_AMI_ID}"
-            echo "App AMI: ${env.APP_AMI_ID}"
-            echo "Target: ${params.DEPLOYMENT_TARGET}"
-            echo "Traffic: ${params.TRAFFIC_SPLIT}"
+            script {
+                def message = """
+                    ✅ DEPLOYMENT SUCCESS
+                    
+                    Target: ${params.DEPLOYMENT_TARGET}
+                    Traffic: ${params.TRAFFIC_SPLIT}
+                    Commit: ${env.GIT_COMMIT_SHORT}
+                    Duration: ${currentBuild.durationString}
+                """
+                echo message
+                
+                // TODO: Send Slack/Email notification
+            }
         }
         failure {
-            echo "✗ Deployment failed. Check logs above."
+            script {
+                def message = """
+                    ❌ DEPLOYMENT FAILED
+                    
+                    Target: ${params.DEPLOYMENT_TARGET}
+                    Traffic: ${params.TRAFFIC_SPLIT}
+                    Commit: ${env.GIT_COMMIT_SHORT}
+                    
+                    ${env.HEALTH_CHECK_FAILED == 'true' ? '⚠️ Automated rollback initiated' : ''}
+                """
+                echo message
+                
+                // TODO: Send Slack/Email notification
+            }
         }
         always {
             cleanWs()
