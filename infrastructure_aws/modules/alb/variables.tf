@@ -34,6 +34,19 @@ variable "sns_topic_arn" {
   type        = string
 }
 
+# ===== BLUE/GREEN DEPLOYMENT VARIABLES =====
+variable "traffic_distribution_blue" {
+  description = "Traffic weight for blue environment (0-100)"
+  type        = number
+  default     = 100
+}
+
+variable "traffic_distribution_green" {
+  description = "Traffic weight for green environment (0-100)"
+  type        = number
+  default     = 0
+}
+
 # variable "certificate_arn" { 
 #   description = "ARN of the certificate for HTTPS"
 #   type = string 

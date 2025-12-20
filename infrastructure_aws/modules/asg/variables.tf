@@ -64,13 +64,25 @@ variable "private_app_subnet_ids" {
   type        = list(string)
 }
 
-variable "web_target_group_arn" {
-  description = "ARN of the web target group"
+# ===== BLUE TARGET GROUPS =====
+variable "web_target_group_blue_arn" {
+  description = "ARN of the web blue target group"
   type        = string
 }
 
-variable "app_target_group_arn" {
-  description = "ARN of the app target group"
+variable "app_target_group_blue_arn" {
+  description = "ARN of the app blue target group"
+  type        = string
+}
+
+# ===== GREEN TARGET GROUPS =====
+variable "web_target_group_green_arn" {
+  description = "ARN of the web green target group"
+  type        = string
+}
+
+variable "app_target_group_green_arn" {
+  description = "ARN of the app green target group"
   type        = string
 }
 
@@ -107,5 +119,31 @@ variable "ec2_instance_profile_name" {
 variable "alb_dns_name" {
   description = "DNS name of the ALB"
   type        = string
+}
+
+# ===== BLUE/GREEN ENVIRONMENT CONTROL =====
+variable "enable_blue_env" {
+  description = "Enable blue environment (true = running, false = scaled to 0)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_green_env" {
+  description = "Enable green environment (true = running, false = scaled to 0)"
+  type        = bool
+  default     = false
+}
+
+# ===== AMI CONFIGURATIONS =====
+variable "web_ami_id_green" {
+  description = "AMI ID for web tier green environment (optional, defaults to web_ami_id)"
+  type        = string
+  default     = ""
+}
+
+variable "app_ami_id_green" {
+  description = "AMI ID for app tier green environment (optional, defaults to app_ami_id)"
+  type        = string
+  default     = ""
 }
 

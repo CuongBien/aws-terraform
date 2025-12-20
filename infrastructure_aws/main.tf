@@ -22,7 +22,7 @@ module "vpc" {
 #   my_ip        = var.my_ip
 # }
 
-# ALB Module
+# ALB Module with Blue/Green support
 module "alb" {
   source = "./modules/alb"
 
@@ -34,6 +34,11 @@ module "alb" {
   private_web_subnet_ids = module.vpc.private_web_subnet_ids
 
   sns_topic_arn        = aws_sns_topic.alarms_topic.arn
+  
+  # Blue/Green traffic distribution
+  traffic_distribution_blue  = var.traffic_distribution_blue
+  traffic_distribution_green = var.traffic_distribution_green
+  
   # certificate_arn      = aws_acm_certificate.cert.arn
 }
 
@@ -50,7 +55,7 @@ module "rds" {
   db_password = var.db_password
 
 }
-# ASG Module
+# ASG Module with Blue/Green support
 module "asg" {
   source = "./modules/asg"
 
@@ -59,8 +64,15 @@ module "asg" {
   app_sg_id                 = aws_security_group.app.id
   private_web_subnet_ids    = module.vpc.private_web_subnet_ids
   private_app_subnet_ids    = module.vpc.private_app_subnet_ids
-  web_target_group_arn      = module.alb.web_target_group_arn
-  app_target_group_arn      = module.alb.app_target_group_arn
+  
+  # Blue Target Groups
+  web_target_group_blue_arn = module.alb.web_target_group_blue_arn
+  app_target_group_blue_arn = module.alb.app_target_group_blue_arn
+  
+  # Green Target Groups
+  web_target_group_green_arn = module.alb.web_target_group_green_arn
+  app_target_group_green_arn = module.alb.app_target_group_green_arn
+  
   alb_dns_name              = module.alb.alb_dns_name
   internal_alb_dns_name     = module.alb.internal_alb_dns_name
   
@@ -73,6 +85,14 @@ module "asg" {
 
   # Key pair for EC2 instances (optional)
   key_pair_name = var.key_pair_name
+  
+  # Blue/Green environment control
+  enable_blue_env  = var.enable_blue_env
+  enable_green_env = var.enable_green_env
+  
+  # AMI configurations (optional - for testing new AMIs)
+  web_ami_id_green = var.web_ami_id_green
+  app_ami_id_green = var.app_ami_id_green
 }
 
 module "nacl" {
@@ -123,6 +143,10 @@ resource "aws_security_group" "alb" {
   description = "Security group for Public ALB"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-alb-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "internal_alb" {
@@ -130,6 +154,10 @@ resource "aws_security_group" "internal_alb" {
   description = "Security group for Internal ALB"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-internal-alb-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "web" {
@@ -137,6 +165,10 @@ resource "aws_security_group" "web" {
   description = "Security group for Web Tier EC2 instances"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-web-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "app" {
@@ -144,6 +176,10 @@ resource "aws_security_group" "app" {
   description = "Security group for App Tier EC2 instances"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-app-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "db" {
@@ -151,6 +187,10 @@ resource "aws_security_group" "db" {
   description = "Security group for RDS instances"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-db-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "bastion" {
@@ -158,6 +198,10 @@ resource "aws_security_group" "bastion" {
   description = "Security group for Bastion Host"
   vpc_id      = module.vpc.vpc_id
   tags        = { Name = "${var.project_name}-bastion-sg" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 

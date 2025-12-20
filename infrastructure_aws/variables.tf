@@ -45,6 +45,43 @@ variable "my_ip" {
   default     = "117.3.54.230/32" 
 }
 
+# ===== BLUE/GREEN DEPLOYMENT VARIABLES =====
+variable "traffic_distribution_blue" {
+  description = "Percentage of traffic to blue environment (0-100)"
+  type        = number
+  default     = 100  # 100% traffic đến blue
+}
+
+variable "traffic_distribution_green" {
+  description = "Percentage of traffic to green environment (0-100)"
+  type        = number
+  default     = 0    # 0% traffic đến green
+}
+
+variable "enable_blue_env" {
+  description = "Enable blue environment (instances running)"
+  type        = bool
+  default     = true  # Blue đang chạy
+}
+
+variable "enable_green_env" {
+  description = "Enable green environment (instances running)"
+  type        = bool
+  default     = false # Green không chạy
+}
+
+variable "web_ami_id_green" {
+  description = "AMI ID for green web tier (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "app_ami_id_green" {
+  description = "AMI ID for green app tier (optional)"
+  type        = string
+  default     = ""
+}
+
 # variable "project_name" {
 #   description = "Name of the project"
 #   type        = string

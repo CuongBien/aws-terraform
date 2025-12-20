@@ -17,11 +17,16 @@ resource "aws_lb" "external" {
   }
 }
 
-resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-web-tg"
+# ===== WEB TARGET GROUPS - BLUE/GREEN =====
+resource "aws_lb_target_group" "web_blue" {
+  name     = "${var.project_name}-web-tg-blue"
   port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   health_check {
     enabled             = true
@@ -33,20 +38,63 @@ resource "aws_lb_target_group" "web" {
     matcher             = "200-399"
   }
 
-
   tags = {
-    Name = "${var.project_name}-web-tg"
+    Name        = "${var.project_name}-web-tg-blue"
+    Environment = "blue"
   }
 }
 
+resource "aws_lb_target_group" "web_green" {
+  name     = "${var.project_name}-web-tg-green"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/health"
+    timeout             = 5
+    unhealthy_threshold = 2
+    healthy_threshold   = 2
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-web-tg-green"
+    Environment = "green"
+  }
+}
+
+# ===== LISTENER WITH WEIGHTED TARGET GROUPS =====
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.external.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
+    type = "forward"
+    
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.web_blue.arn
+        weight = var.traffic_distribution_blue
+      }
+
+      target_group {
+        arn    = aws_lb_target_group.web_green.arn
+        weight = var.traffic_distribution_green
+      }
+
+      stickiness {
+        enabled  = true
+        duration = 3600
+      }
+    }
   }
 }
 
@@ -80,13 +128,17 @@ resource "aws_lb" "internal" {
   }
 }
 
-# Target Group for App Tier
-resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-app-tg" 
+# ===== APP TARGET GROUPS - BLUE/GREEN =====
+resource "aws_lb_target_group" "app_blue" {
+  name     = "${var.project_name}-app-tg-blue" 
   port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
+  lifecycle {
+    create_before_destroy = true
+  }
+  
   health_check {
     enabled             = true
     interval            = 30
@@ -98,11 +150,38 @@ resource "aws_lb_target_group" "app" {
   }
 
   tags = {
-    Name = "${var.project_name}-app-tg"
+    Name        = "${var.project_name}-app-tg-blue"
+    Environment = "blue"
   }
 }
 
-# Listener for Internal ALB
+resource "aws_lb_target_group" "app_green" {
+  name     = "${var.project_name}-app-tg-green" 
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
+  
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/health.txt"
+    timeout             = 5
+    unhealthy_threshold = 2
+    healthy_threshold   = 2
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-app-tg-green"
+    Environment = "green"
+  }
+}
+
+# ===== INTERNAL LISTENER WITH WEIGHTED TARGET GROUPS =====
 #tfsec:ignore:aws-elb-http-not-used # Internal traffic is considered trusted
 resource "aws_lb_listener" "internal_http" {
   load_balancer_arn = aws_lb.internal.arn
@@ -110,8 +189,24 @@ resource "aws_lb_listener" "internal_http" {
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    type = "forward"
+    
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.app_blue.arn
+        weight = var.traffic_distribution_blue
+      }
+
+      target_group {
+        arn    = aws_lb_target_group.app_green.arn
+        weight = var.traffic_distribution_green
+      }
+
+      stickiness {
+        enabled  = true
+        duration = 3600
+      }
+    }
   }
 }
 
