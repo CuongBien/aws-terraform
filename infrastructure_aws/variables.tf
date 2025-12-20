@@ -42,7 +42,7 @@ variable "key_pair_name" {
 variable "my_ip" {
   description = "Your home or office IP address for SSH access"
   type        = string
-  default     = "117.3.54.230/32" 
+  default     = "172.16.252.250/32" 
 }
 
 # ===== BLUE/GREEN DEPLOYMENT VARIABLES =====
