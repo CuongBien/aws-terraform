@@ -8,6 +8,7 @@ DB_PASS="${db_password}"
 DB_NAME="${db_name}"
 PROJECT="${project_name}"
 SHOP_URL="${shop_url}"   # ví dụ: http://<public-alb-dns>/
+ENVIRONMENT="${environment}"
 
 log(){ echo "[user-data] $*"; }
 
@@ -138,8 +139,8 @@ if [ -x /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
 {
   "agent": { "run_as_user": "root" },
   "logs": { "logs_collected": { "files": { "collect_list": [
-    { "file_path": "$ACCESS_LOG", "log_group_name": "${project_name}-app-access", "log_stream_name": "{instance_id}" },
-    { "file_path": "$ERROR_LOG",  "log_group_name": "${project_name}-app-error",  "log_stream_name": "{instance_id}" }
+    { "file_path": "$ACCESS_LOG", "log_group_name": "$PROJECT-app-$ENVIRONMENT-access", "log_stream_name": "{instance_id}" },
+    { "file_path": "$ERROR_LOG",  "log_group_name": "$PROJECT-app-$ENVIRONMENT-error",  "log_stream_name": "{instance_id}" }
   ]}}}
 }
 JSON
