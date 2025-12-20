@@ -201,6 +201,7 @@ pipeline {
                     | jq -r '.data.id')
 
                     echo "Terraform run \$RUN_ID"
+                    echo "View: https://app.terraform.io/app/${TF_ORG}/workspaces/${TF_WORKSPACE}/runs/\$RUN_ID"
 
                     while true; do
                     STATUS=\$(curl -s \\
@@ -210,8 +211,22 @@ pipeline {
 
                     echo "Terraform status: \$STATUS"
 
-                    if [ "\$STATUS" = "applied" ]; then exit 0; fi
-                    if [ "\$STATUS" = "errored" ] || [ "\$STATUS" = "canceled" ]; then exit 1; fi
+                    # Success states
+                    if [ "\$STATUS" = "applied" ]; then 
+                        echo "✓ Terraform apply completed"
+                        exit 0
+                    fi
+                    
+                    if [ "\$STATUS" = "planned_and_finished" ]; then 
+                        echo "✓ No changes to apply"
+                        exit 0
+                    fi
+
+                    # Failure states
+                    if [ "\$STATUS" = "errored" ] || [ "\$STATUS" = "canceled" ]; then 
+                        echo "✗ Terraform run failed: \$STATUS"
+                        exit 1
+                    fi
 
                     sleep 15
                     done
