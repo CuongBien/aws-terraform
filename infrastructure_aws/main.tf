@@ -347,6 +347,7 @@ resource "aws_security_group_rule" "web_ingress_ssh_from_bastion" {
   security_group_id        = aws_security_group.web.id
   description              = "Allow SSH from Bastion"
 }
+
 resource "aws_security_group_rule" "app_ingress_ssh_from_bastion" {
   type                     = "ingress"
   from_port                = 22
@@ -355,4 +356,14 @@ resource "aws_security_group_rule" "app_ingress_ssh_from_bastion" {
   source_security_group_id = aws_security_group.bastion.id
   security_group_id        = aws_security_group.app.id
   description              = "Allow SSH from Bastion"
+}
+
+resource "aws_security_group_rule" "web_ingress_http_from_bastion" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion.id
+  security_group_id        = aws_security_group.web.id
+  description              = "Allow HTTP from Bastion for testing Web instances"
 }
