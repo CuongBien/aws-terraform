@@ -1,0 +1,29 @@
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jenkins-pbl4
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_jenkins_home:/var/jenkins_home  # ← Đổi thành volume cũ
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/workspace/pbl4-terraform:ro
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+
+volumes:
+  jenkins_jenkins_home:
+    external: true  # ← Volume đã tồn tại
+
+networks:
+  jenkins-network:
+    driver: bridge

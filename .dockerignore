@@ -1,0 +1,7 @@
+# .dockerignore
+.git/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+*.log
