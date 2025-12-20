@@ -22,6 +22,7 @@ resource "aws_launch_template" "web_blue" {
   user_data = base64encode(templatefile("${path.module}/user_data_web.sh.tftpl", {
     internal_alb_dns_name = var.internal_alb_dns_name
     project_name          = var.project_name
+    environment           = "blue"
   }))
 
   tag_specifications {
