@@ -130,7 +130,7 @@ try:
         sys.exit(1)
         
 except Exception as e:
-    print(f'ERROR: {str(e)}', file=sys.stderr)
+    print(f'ERRORS: {str(e)}', file=sys.stderr)
     import traceback
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)
