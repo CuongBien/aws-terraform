@@ -21,8 +21,11 @@ pipeline {
         PROJECT_NAME = 'pbl4-three-tier'
         TF_ORG       = 'CBien'
         TF_WORKSPACE = 'aws-terraform-vcs'
-
-        TF_WORKSPACE_ID = ''
+        
+        // Hardcoded workspace ID (static, not a secret)
+        // Get from: https://app.terraform.io/app/CBien/workspaces/aws-terraform-vcs/settings/general
+        TF_WORKSPACE_ID = 'ws-ZdCj4RaKxyFkwYuU'
+        
         PREV_BLUE  = ''
         PREV_GREEN = ''
         ROLLBACK_NEEDED = 'false'
@@ -85,68 +88,14 @@ pipeline {
         /* ========== RESOLVE WORKSPACE ID ========== */
         stage('Resolve Terraform Workspace') {
             steps {
-                withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
-                    script {
-                        echo "🔍 Getting Terraform Workspace ID..."
-                        echo "Organization: ${TF_ORG}"
-                        echo "Workspace: ${TF_WORKSPACE}"
-                        
-                        // Use Python to get workspace ID and Base64 encode to bypass masking
-                        sh(script: '''
-                            python3 << 'PYTHON_SCRIPT'
-import os
-import urllib.request
-import json
-import sys
-import base64
-
-try:
-    token = os.environ.get('TF_TOKEN', '')
-    org = os.environ.get('TF_ORG', '')
-    workspace = os.environ.get('TF_WORKSPACE', '')
-    
-    if not token:
-        print('ERROR: TF_TOKEN not found', file=sys.stderr)
-        sys.exit(1)
-    
-    url = f'https://app.terraform.io/api/v2/organizations/{org}/workspaces/{workspace}'
-    req = urllib.request.Request(url)
-    req.add_header('Authorization', f'Bearer {token}')
-    req.add_header('Content-Type', 'application/vnd.api+json')
-    
-    response = urllib.request.urlopen(req)
-    data = json.loads(response.read().decode('utf-8'))
-    
-    workspace_id = data.get('data', {}).get('id', '')
-    if workspace_id:
-        # Base64 encode to prevent Jenkins from recognizing and masking it
-        encoded = base64.b64encode(workspace_id.encode('utf-8')).decode('utf-8')
-        with open('/tmp/workspace_id.b64', 'w') as f:
-            f.write(encoded)
-        print(f'SUCCESS: Workspace ID saved (original length: {len(workspace_id)}, encoded length: {len(encoded)})', file=sys.stderr)
-    else:
-        print('ERROR: No workspace ID in response', file=sys.stderr)
-        print(f'Response: {json.dumps(data, indent=2)}', file=sys.stderr)
-        sys.exit(1)
-        
-except Exception as e:
-    print(f'ERRORS: {str(e)}', file=sys.stderr)
-    import traceback
-    traceback.print_exc(file=sys.stderr)
-    sys.exit(1)
-PYTHON_SCRIPT
-                        ''')
-                        
-                        // Decode Base64 and write to file to avoid stdout masking
-                        def encoded = readFile('/tmp/workspace_id.b64').trim()
-                        sh(script: "echo '${encoded}' | base64 -d > /tmp/workspace_id_decoded.txt")
-                        env.TF_WORKSPACE_ID = readFile('/tmp/workspace_id_decoded.txt').trim()
-                        
-                        echo "✅ Workspace ID: ${env.TF_WORKSPACE_ID}"
-                        
-                        if (env.TF_WORKSPACE_ID == null || env.TF_WORKSPACE_ID == 'null' || env.TF_WORKSPACE_ID == '') {
-                            error("❌ Failed to get Terraform Workspace ID. Check token permissions and workspace name.")
-                        }
+                script {
+                    echo "🔍 Using Terraform Workspace..."
+                    echo "Organization: ${TF_ORG}"
+                    echo "Workspace: ${TF_WORKSPACE}"
+                    echo "Workspace ID: ${env.TF_WORKSPACE_ID}"
+                    
+                    if (env.TF_WORKSPACE_ID == null || env.TF_WORKSPACE_ID == '') {
+                        error("❌ TF_WORKSPACE_ID not configured")
                     }
                 }
             }
