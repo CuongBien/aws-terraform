@@ -11,19 +11,20 @@ def call(String tfToken, String runId, Integer timeoutMinutes = 30) {
 
           echo "Terraform status: \$STATUS"
 
-          if [[ "\$STATUS" =~ applied|planned_and_finished ]]; then
-            echo "✓ Terraform completed"
-            exit 0
-          fi
-          
-          if [[ "\$STATUS" =~ errored|canceled ]]; then
-            echo "✗ Terraform failed"
-            exit 1
-          fi
-
-          if [[ "\$STATUS" == "pending_approval" ]]; then
-            echo "⏸ Waiting for Terraform Cloud approval..."
-          fi
+          # Use case for POSIX sh compatibility
+          case "\$STATUS" in
+            applied|planned_and_finished)
+              echo "✓ Terraform completed"
+              exit 0
+              ;;
+            errored|canceled)
+              echo "✗ Terraform failed"
+              exit 1
+              ;;
+            pending_approval)
+              echo "⏸ Waiting for Terraform Cloud approval..."
+              ;;
+          esac
 
           sleep 15
         done
