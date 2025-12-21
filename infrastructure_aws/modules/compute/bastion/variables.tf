@@ -47,10 +47,10 @@ variable "ec2_instance_profile_name" {
 variable "root_volume_size" {
   description = "Size of the root volume in GB"
   type        = number
-  default     = 8
+  default     = 30
 
   validation {
-    condition     = var.root_volume_size >= 8 && var.root_volume_size <= 100
-    error_message = "Root volume size must be between 8 and 100 GB."
+    condition     = var.root_volume_size >= 30 && var.root_volume_size <= 100
+    error_message = "Root volume size must be between 30 and 100 GB."
   }
 }

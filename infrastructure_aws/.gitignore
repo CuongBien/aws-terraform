@@ -35,3 +35,11 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Documentation files (keep README.md and DEPLOYMENT_GUIDE.md)
+REFACTORING_SUMMARY.md
+BLUE_GREEN_DEPLOYMENT.md
+CLOUDWATCH_LOGS_FIX.md
+DEPLOYMENT_GUIDE.md
+*.txt
+modules/describe.txt
