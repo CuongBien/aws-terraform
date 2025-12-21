@@ -106,32 +106,22 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
                     script {
-                        // Debug: Show all variables
+                        // Fetch and save to files to avoid Jenkins stdout masking
                         sh """
-                          echo "🔍 Fetching all workspace variables..."
                           curl -s -H "Authorization: Bearer ${TF_TOKEN}" \
                           https://app.terraform.io/api/v2/workspaces/${env.TF_WORKSPACE_ID}/vars \
-                          | jq -r '.data[] | "\\(.attributes.key) = \\(.attributes.value)"'
+                          | jq -r '.data[] | select(.attributes.key=="traffic_distribution_blue") | .attributes.value' \
+                          > /tmp/prev_blue.txt
+                          
+                          curl -s -H "Authorization: Bearer ${TF_TOKEN}" \
+                          https://app.terraform.io/api/v2/workspaces/${env.TF_WORKSPACE_ID}/vars \
+                          | jq -r '.data[] | select(.attributes.key=="traffic_distribution_green") | .attributes.value' \
+                          > /tmp/prev_green.txt
                         """
                         
-                        env.PREV_BLUE = sh(
-                            returnStdout: true,
-                            script: """
-                              curl -s -H "Authorization: Bearer ${TF_TOKEN}" \
-                              https://app.terraform.io/api/v2/workspaces/${env.TF_WORKSPACE_ID}/vars \
-                              | jq -r '.data[] | select(.attributes.key=="traffic_distribution_blue") | .attributes.value'
-                            """
-                        ).trim()
-
-                        env.PREV_GREEN = sh(
-                            returnStdout: true,
-                            script: """
-                              curl -s -H "Authorization: Bearer ${TF_TOKEN}" \
-                              https://app.terraform.io/api/v2/workspaces/${env.TF_WORKSPACE_ID}/vars \
-                              | jq -r '.data[] | select(.attributes.key=="traffic_distribution_green") | .attributes.value'
-                            """
-                        ).trim()
-
+                        env.PREV_BLUE = readFile('/tmp/prev_blue.txt').trim()
+                        env.PREV_GREEN = readFile('/tmp/prev_green.txt').trim()
+                        
                         echo "Raw values: PREV_BLUE='${env.PREV_BLUE}', PREV_GREEN='${env.PREV_GREEN}'"
 
                         // Set defaults if variables don't exist (first deployment)
