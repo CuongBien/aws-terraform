@@ -91,19 +91,29 @@ pipeline {
                         echo "Organization: ${TF_ORG}"
                         echo "Workspace: ${TF_WORKSPACE}"
                         
-                        // Write token to temp file to avoid masking issues
-                        sh 'echo $TF_TOKEN > /tmp/tf_token.txt'
-                        
-                        // Get workspace ID using token from file
+                        // Use Python to avoid Jenkins credential masking issues
                         env.TF_WORKSPACE_ID = sh(
                             returnStdout: true,
-                            script: """
-                            TOKEN=\$(cat /tmp/tf_token.txt)
-                            curl -s -H "Authorization: Bearer \$TOKEN" \\
-                            "https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE}" \\
-                            | jq -r '.data.id'
-                            rm -f /tmp/tf_token.txt
-                            """
+                            script: '''
+                            python3 -c "
+import os
+import urllib.request
+import json
+
+token = os.environ['TF_TOKEN']
+org = os.environ['TF_ORG']
+workspace = os.environ['TF_WORKSPACE']
+
+url = f'https://app.terraform.io/api/v2/organizations/{org}/workspaces/{workspace}'
+req = urllib.request.Request(url)
+req.add_header('Authorization', f'Bearer {token}')
+req.add_header('Content-Type', 'application/vnd.api+json')
+
+response = urllib.request.urlopen(req)
+data = json.loads(response.read().decode('utf-8'))
+print(data['data']['id'])
+"
+                            '''
                         ).trim()
                         
                         echo "✅ Workspace ID: ${env.TF_WORKSPACE_ID}"
