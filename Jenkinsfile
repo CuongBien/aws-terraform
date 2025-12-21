@@ -137,12 +137,10 @@ except Exception as e:
 PYTHON_SCRIPT
                         ''')
                         
-                        // Decode Base64 to get the actual workspace ID
+                        // Decode Base64 and write to file to avoid stdout masking
                         def encoded = readFile('/tmp/workspace_id.b64').trim()
-                        env.TF_WORKSPACE_ID = sh(
-                            script: "echo '${encoded}' | base64 -d",
-                            returnStdout: true
-                        ).trim()
+                        sh(script: "echo '${encoded}' | base64 -d > /tmp/workspace_id_decoded.txt")
+                        env.TF_WORKSPACE_ID = readFile('/tmp/workspace_id_decoded.txt').trim()
                         
                         echo "✅ Workspace ID: ${env.TF_WORKSPACE_ID}"
                         
