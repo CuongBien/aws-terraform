@@ -91,13 +91,18 @@ pipeline {
                         echo "Organization: ${TF_ORG}"
                         echo "Workspace: ${TF_WORKSPACE}"
                         
-                        // Get workspace ID directly without function
+                        // Write token to temp file to avoid masking issues
+                        sh 'echo $TF_TOKEN > /tmp/tf_token.txt'
+                        
+                        // Get workspace ID using token from file
                         env.TF_WORKSPACE_ID = sh(
                             returnStdout: true,
                             script: """
-                            curl -s -H "Authorization: Bearer \${TF_TOKEN}" \\
+                            TOKEN=\$(cat /tmp/tf_token.txt)
+                            curl -s -H "Authorization: Bearer \$TOKEN" \\
                             "https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE}" \\
                             | jq -r '.data.id'
+                            rm -f /tmp/tf_token.txt
                             """
                         ).trim()
                         
