@@ -87,8 +87,28 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
                     script {
+                        // Debug: Show full API response
+                        echo "🔍 Debugging Terraform Cloud API..."
+                        echo "Organization: ${TF_ORG}"
+                        echo "Workspace: ${TF_WORKSPACE}"
+                        
+                        def fullResponse = sh(
+                            returnStdout: true,
+                            script: """
+                            curl -s -H "Authorization: Bearer ${TF_TOKEN}" \\
+                            "https://app.terraform.io/api/v2/organizations/${TF_ORG}/workspaces/${TF_WORKSPACE}"
+                            """
+                        ).trim()
+                        
+                        echo "API Response:"
+                        echo fullResponse
+                        
                         env.TF_WORKSPACE_ID = tfGetWorkspaceId(TF_TOKEN, TF_ORG, TF_WORKSPACE)
                         echo "Workspace ID: ${env.TF_WORKSPACE_ID}"
+                        
+                        if (env.TF_WORKSPACE_ID == null || env.TF_WORKSPACE_ID == 'null' || env.TF_WORKSPACE_ID == '') {
+                            error("❌ Failed to get Terraform Workspace ID. Check token permissions and workspace name.")
+                        }
                     }
                 }
             }
