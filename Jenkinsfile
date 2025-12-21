@@ -222,7 +222,7 @@ pipeline {
     }
 
     post {
-        success { echo "✅ DEPLOYMENT SUCCESSFUL" }
+        success { echo "✅ DEPLOYMENT SUCCESSFULLY" }
         failure { echo "❌ DEPLOYMENT FAILED (rollback executed if needed)" }
         always  { cleanWs() }
     }
