@@ -106,6 +106,14 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
                     script {
+                        // Debug: Show all variables
+                        sh """
+                          echo "🔍 Fetching all workspace variables..."
+                          curl -s -H "Authorization: Bearer ${TF_TOKEN}" \
+                          https://app.terraform.io/api/v2/workspaces/${env.TF_WORKSPACE_ID}/vars \
+                          | jq -r '.data[] | "\\(.attributes.key) = \\(.attributes.value)"'
+                        """
+                        
                         env.PREV_BLUE = sh(
                             returnStdout: true,
                             script: """
@@ -123,6 +131,19 @@ pipeline {
                               | jq -r '.data[] | select(.attributes.key=="traffic_distribution_green") | .attributes.value'
                             """
                         ).trim()
+
+                        echo "Raw values: PREV_BLUE='${env.PREV_BLUE}', PREV_GREEN='${env.PREV_GREEN}'"
+
+                        // Set defaults if variables don't exist (first deployment)
+                        if (env.PREV_BLUE == null || env.PREV_BLUE == '' || env.PREV_BLUE == 'null') {
+                            env.PREV_BLUE = '100'
+                            echo "⚠️ traffic_distribution_blue not found, defaulting to 100%"
+                        }
+                        
+                        if (env.PREV_GREEN == null || env.PREV_GREEN == '' || env.PREV_GREEN == 'null') {
+                            env.PREV_GREEN = '0'
+                            echo "⚠️ traffic_distribution_green not found, defaulting to 0%"
+                        }
 
                         if (!env.PREV_BLUE.isNumber() || !env.PREV_GREEN.isNumber()) {
                             error("Invalid previous traffic state – abort")
