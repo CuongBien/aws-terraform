@@ -99,19 +99,38 @@ pipeline {
 import os
 import urllib.request
 import json
+import sys
 
-token = os.environ['TF_TOKEN']
-org = os.environ['TF_ORG']
-workspace = os.environ['TF_WORKSPACE']
-
-url = f'https://app.terraform.io/api/v2/organizations/{org}/workspaces/{workspace}'
-req = urllib.request.Request(url)
-req.add_header('Authorization', f'Bearer {token}')
-req.add_header('Content-Type', 'application/vnd.api+json')
-
-response = urllib.request.urlopen(req)
-data = json.loads(response.read().decode('utf-8'))
-print(data['data']['id'])
+try:
+    token = os.environ.get('TF_TOKEN', '')
+    org = os.environ.get('TF_ORG', '')
+    workspace = os.environ.get('TF_WORKSPACE', '')
+    
+    if not token:
+        print('ERROR: TF_TOKEN not found', file=sys.stderr)
+        sys.exit(1)
+    
+    url = f'https://app.terraform.io/api/v2/organizations/{org}/workspaces/{workspace}'
+    req = urllib.request.Request(url)
+    req.add_header('Authorization', f'Bearer {token}')
+    req.add_header('Content-Type', 'application/vnd.api+json')
+    
+    response = urllib.request.urlopen(req)
+    data = json.loads(response.read().decode('utf-8'))
+    
+    workspace_id = data.get('data', {}).get('id', '')
+    if workspace_id:
+        print(workspace_id)
+    else:
+        print('ERROR: No workspace ID in response', file=sys.stderr)
+        print(f'Response keys: {list(data.keys())}', file=sys.stderr)
+        sys.exit(1)
+        
+except Exception as e:
+    print(f'ERROR: {str(e)}', file=sys.stderr)
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
 "
                             '''
                         ).trim()
