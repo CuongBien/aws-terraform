@@ -135,8 +135,15 @@ pipeline {
                             echo "⚠️ traffic_distribution_green not found, defaulting to 0%"
                         }
 
-                        if (!env.PREV_BLUE.isNumber() || !env.PREV_GREEN.isNumber()) {
-                            error("Invalid previous traffic state – abort")
+                        // Validate after defaults are set
+                        try {
+                            def blueInt = env.PREV_BLUE.toInteger()
+                            def greenInt = env.PREV_GREEN.toInteger()
+                            if (blueInt < 0 || blueInt > 100 || greenInt < 0 || greenInt > 100) {
+                                error("Traffic values out of range (0-100)")
+                            }
+                        } catch (NumberFormatException e) {
+                            error("Invalid traffic values - not numbers")
                         }
 
                         echo "Saved state → Blue ${env.PREV_BLUE}% | Green ${env.PREV_GREEN}%"
