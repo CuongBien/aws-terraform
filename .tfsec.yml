@@ -1,0 +1,32 @@
+# ========================================
+# GATE 1: TFSEC - FAST FAIL
+# ========================================
+# This is the first security gate
+# CRITICAL and HIGH issues will FAIL the pipeline
+# ========================================
+
+  # Exclude specific checks - documented false positives
+  exclude:
+    - aws-ec2-no-public-egress-sgr
+    - aws-ec2-no-excessive-port-access
+    - aws-ec2-no-public-ingress-acl
+    - aws-elb-http-not-used
+    - aws-ec2-no-public-ip-subnet
+    - aws-iam-no-policy-wildcards
+
+  # Severity levels to report (only HIGH and CRITICAL)
+  severity_overrides:
+    CRITICAL: error
+    HIGH: error
+    MEDIUM: ignore
+    LOW: ignore
+
+  # Minimum severity level to fail the build
+  minimum_severity: HIGH
+
+  # Exit with error code if issues found
+  force-all-dirs: true
+  minimum_severity: HIGH
+
+  # Exit with error code if issues found
+  force-all-dirs: true

@@ -167,7 +167,7 @@ variable "bastion_instance_type" {
 variable "bastion_root_volume_size" {
   description = "Size of bastion root volume in GB"
   type        = number
-  default     = 8
+  default     = 30
 }
 
 variable "bastion_allowed_cidrs" {

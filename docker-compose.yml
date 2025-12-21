@@ -10,7 +10,7 @@ services:
       - "8080:8080"
       - "50000:50000"
     volumes:
-      - jenkins_jenkins_home:/var/jenkins_home  # ← Đổi thành volume cũ
+      - jenkins_jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/workspace/pbl4-terraform:ro
     environment:
@@ -22,7 +22,7 @@ services:
 
 volumes:
   jenkins_jenkins_home:
-    external: true  # ← Volume đã tồn tại
+    external: true
 
 networks:
   jenkins-network:

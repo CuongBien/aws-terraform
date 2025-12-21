@@ -43,6 +43,45 @@ pipeline {
             }
         }
 
+        /* ========== GATE 1: TFSEC FAST FAIL ========== */
+        stage('🥇 Gate 1: tfsec (Fast Fail)') {
+            steps {
+                script {
+                    echo "🚨 Running tfsec - CRITICAL/HIGH issues will FAIL pipeline"
+                    
+                    // Run tfsec WITHOUT soft-fail - will fail pipeline on HIGH/CRITICAL
+                    sh """
+                    tfsec infrastructure_aws \
+                      --config-file .tfsec.yml \
+                      --format default
+                    """
+                    
+                    echo "✅ tfsec passed - No CRITICAL/HIGH security issues found"
+                }
+            }
+        }
+
+        /* ========== GATE 2: CHECKOV DEEP SCAN ========== */
+        stage('🥈 Gate 2: checkov (Deep Scan)') {
+            steps {
+                script {
+                    echo "🔍 Running checkov - Compliance & secrets scan (warning only)"
+                    
+                    // Run checkov with soft-fail - only warns, doesn't block
+                    try {
+                        sh """
+                        checkov -d infrastructure_aws \
+                          --config-file .checkov.yml \
+                          --soft-fail
+                        """
+                        echo "✅ checkov scan completed"
+                    } catch (e) {
+                        echo "⚠️ checkov findings - Review recommended but not blocking"
+                    }
+                }
+            }
+        }
+
         /* ========== RESOLVE WORKSPACE ID ========== */
         stage('Resolve Terraform Workspace') {
             steps {

@@ -26,6 +26,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
+#tfsec:ignore:aws-ec2-no-public-ingress-sgr # Public-facing ALB requires internet access
 resource "aws_security_group_rule" "alb_ingress_http" {
   type              = "ingress"
   from_port         = 80
@@ -36,6 +37,7 @@ resource "aws_security_group_rule" "alb_ingress_http" {
   description       = "Allow HTTP from internet"
 }
 
+#tfsec:ignore:aws-ec2-no-public-ingress-sgr # Public-facing ALB requires internet access
 resource "aws_security_group_rule" "alb_ingress_https" {
   type              = "ingress"
   from_port         = 443
@@ -46,6 +48,7 @@ resource "aws_security_group_rule" "alb_ingress_https" {
   description       = "Allow HTTPS from internet"
 }
 
+#tfsec:ignore:aws-ec2-no-public-egress-sgr # ALB needs outbound to target groups
 resource "aws_security_group_rule" "alb_egress_all" {
   type              = "egress"
   from_port         = 0

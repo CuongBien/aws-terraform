@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     docker.io \
     jq \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Packer 1.10.0
@@ -28,6 +31,16 @@ RUN curl -Lo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.7.0/t
     && chmod +x /usr/local/bin/terraform \
     && rm /tmp/terraform.zip
 
+# Install tfsec (security scanner for Terraform)
+RUN curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+
+# Install checkov (policy-as-code scanner)
+# Create virtual environment for checkov to avoid system package conflicts
+RUN python3 -m venv /opt/checkov-venv \
+    && /opt/checkov-venv/bin/pip install --upgrade pip \
+    && /opt/checkov-venv/bin/pip install checkov \
+    && ln -s /opt/checkov-venv/bin/checkov /usr/local/bin/checkov
+
 # Add jenkins user to docker group
 RUN usermod -aG docker jenkins
 
@@ -35,6 +48,8 @@ RUN usermod -aG docker jenkins
 RUN packer version && \
     terraform version && \
     aws --version && \
+    tfsec --version && \
+    checkov --version && \
     echo "All tools installed successfully!"
 
 USER jenkins

@@ -1,0 +1,52 @@
+# ========================================
+# GATE 2: CHECKOV - DEEP SCAN
+# ========================================
+# This is the second security gate
+# Comprehensive compliance and secrets scanning
+# Reports MEDIUM issues, compliance violations, secrets
+# Does NOT fail pipeline - warning only
+# ========================================
+
+# Directory to scan
+directory:
+  - infrastructure_aws
+
+# Skip specific checks (aligned with tfsec ignores)
+skip-check:
+  # ALB public access - required for public-facing load balancer
+  - CKV_AWS_91
+  - CKV_AWS_150
+  
+  # HTTP listener - acceptable for internal traffic
+  - CKV_AWS_2
+  
+  # RDS IAM authentication - not required for this project
+  - CKV_AWS_161
+
+# Framework to use
+framework:
+  - terraform
+
+# Output format
+output:
+  - cli
+  - json
+
+# Soft fail mode - WARNING ONLY, don't block pipeline
+soft-fail: true
+
+# Compact output
+compact: true
+
+# Download external modules for scanning
+download-external-modules: true
+
+# Check for secrets
+check:
+  - CKV_SECRET_6  # High Entropy String
+  - CKV_SECRET_13 # AWS Credentials
+
+# Compliance frameworks to check
+check-compliance:
+  - aws-cis-1.2
+  - pci-dss-v3.2.1
