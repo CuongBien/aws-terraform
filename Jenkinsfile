@@ -91,11 +91,9 @@ pipeline {
                         echo "Organization: ${TF_ORG}"
                         echo "Workspace: ${TF_WORKSPACE}"
                         
-                        // Use Python to avoid Jenkins credential masking issues
-                        env.TF_WORKSPACE_ID = sh(
-                            returnStdout: true,
-                            script: '''
-                            python3 -c "
+                        // Use Python to avoid Jenkins credential masking - write to file
+                        sh(script: '''
+                            python3 << 'PYTHON_SCRIPT'
 import os
 import urllib.request
 import json
@@ -120,10 +118,13 @@ try:
     
     workspace_id = data.get('data', {}).get('id', '')
     if workspace_id:
-        print(workspace_id)
+        # Write to file to avoid Jenkins masking stdout
+        with open('/tmp/workspace_id.txt', 'w') as f:
+            f.write(workspace_id)
+        print(f'SUCCESS: Workspace ID saved (length: {len(workspace_id)})', file=sys.stderr)
     else:
         print('ERROR: No workspace ID in response', file=sys.stderr)
-        print(f'Response keys: {list(data.keys())}', file=sys.stderr)
+        print(f'Response: {json.dumps(data, indent=2)}', file=sys.stderr)
         sys.exit(1)
         
 except Exception as e:
@@ -131,9 +132,10 @@ except Exception as e:
     import traceback
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)
-"
-                            '''
-                        ).trim()
+PYTHON_SCRIPT
+                        ''')
+                        
+                        env.TF_WORKSPACE_ID = readFile('/tmp/workspace_id.txt').trim()
                         
                         echo "✅ Workspace ID: ${env.TF_WORKSPACE_ID}"
                         
