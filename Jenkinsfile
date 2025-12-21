@@ -181,25 +181,15 @@ pipeline {
                       --query 'TargetGroups[0].TargetGroupArn' \
                       --output text)
 
-                    echo "🏥 Health check: Waiting for at least 2 healthy instances..."
-                    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+                    for i in {1..30}; do
                       HEALTHY=\$(aws elbv2 describe-target-health \
                         --region ${AWS_REGION} \
                         --target-group-arn \$TG_ARN \
-                        --query 'TargetHealthDescriptions[?TargetHealth.State==\`healthy\`] | length(@)' \
+                        --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \
                         --output text)
-                      
-                      echo "Attempt \$i/30: \$HEALTHY healthy instances"
-                      
-                      if [ "\$HEALTHY" -ge 1 ]; then
-                        echo "✅ Health check passed: \$HEALTHY instances healthy"
-                        exit 0
-                      fi
-                      
+                      [ "\$HEALTHY" -ge 1 ] && exit 0
                       sleep 10
                     done
-                    
-                    echo "❌ Health check failed: Only \$HEALTHY instances healthy after 5 minutes"
                     exit 1
                     """
                 }
