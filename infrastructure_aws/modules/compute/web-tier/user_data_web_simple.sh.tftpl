@@ -1,0 +1,89 @@
+#!/bin/bash
+set -xeuo pipefail
+
+log(){ echo "[web-user-data] $*"; }
+ENVIRONMENT="${environment}"
+
+# ========= 1) System Update =========
+dnf -y update
+dnf -y install amazon-cloudwatch-agent
+
+# ========= 2) Nginx đã được baked vào AMI bởi Packer =========
+# Frontend code (v1.0 hoặc v2.0) đã có sẵn tại /var/www/html/
+
+# ========= 3) Tạo server block reverse-proxy + /health =========
+cat >/etc/nginx/conf.d/app_proxy.conf <<'NGX'
+proxy_headers_hash_max_size 512;
+proxy_headers_hash_bucket_size 128;
+
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+log_format performance '$remote_addr - $remote_user [$time_local] '
+                      '"$request" $status $body_bytes_sent '
+                      '"$http_referer" "$http_user_agent" '
+                      'rt=$request_time uct=$upstream_connect_time '
+                      'uht=$upstream_header_time urt=$upstream_response_time';
+
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  access_log /var/log/nginx/access.log performance;
+  error_log /var/log/nginx/error.log;
+
+  root /var/www/html;
+  index index.html;
+
+  # Serve static frontend
+  location / {
+    try_files $uri $uri/ =404;
+  }
+
+  # Proxy API requests to App tier
+  location /api/ {
+    proxy_pass http://${internal_alb_dns_name}/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    add_header X-From-Proxy "web-tier" always;
+  }
+
+  # Health check endpoint
+  location = /health {
+    access_log off;
+    return 200 "ok\n";
+    add_header Content-Type text/plain;
+  }
+
+  # Version endpoint (already in AMI)
+  location = /version {
+    alias /var/www/html/version.txt;
+  }
+}
+NGX
+
+# ========= 4) Start Nginx =========
+systemctl enable nginx
+nginx -t
+systemctl restart nginx
+
+# ========= 5) CloudWatch Logs =========
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CW
+{
+  "agent": { "run_as_user": "root" },
+  "logs": { "logs_collected": { "files": { "collect_list": [
+    { "file_path": "/var/log/nginx/access.log", "log_group_name": "${project_name}-web-$ENVIRONMENT-access", "log_stream_name": "{instance_id}" },
+    { "file_path": "/var/log/nginx/error.log",  "log_group_name": "${project_name}-web-$ENVIRONMENT-error",  "log_stream_name": "{instance_id}" }
+  ]}}}
+}
+CW
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+log "Web tier user-data completed - Frontend is baked in AMI"

@@ -19,7 +19,7 @@ resource "aws_launch_template" "web_blue" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_web.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_web_simple.sh.tftpl", {
     internal_alb_dns_name = var.internal_alb_dns_name
     project_name          = var.project_name
     environment           = "blue"
@@ -114,7 +114,7 @@ resource "aws_launch_template" "web_green" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_web.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_web_simple.sh.tftpl", {
     internal_alb_dns_name = var.internal_alb_dns_name
     project_name          = var.project_name
     environment           = "green"
