@@ -129,7 +129,7 @@ resource "aws_lb" "internal" {
 }
 
 # ===== APP TARGET GROUPS - BLUE/GREEN =====
-resource "aws_lb_target_group" "app_blue" {
+resource "aws_lb_target_group" "app_blue_v3" {
   name     = "${var.project_name}-app-blue-v3" 
   port     = 8080
   protocol = "HTTP"
@@ -151,7 +151,7 @@ resource "aws_lb_target_group" "app_blue" {
   }
 }
 
-resource "aws_lb_target_group" "app_green" {
+resource "aws_lb_target_group" "app_green_v3" {
   name     = "${var.project_name}-app-green-v3" 
   port     = 8080
   protocol = "HTTP"
@@ -183,12 +183,12 @@ resource "aws_lb_listener" "internal_http" {
     
     forward {
       target_group {
-        arn    = aws_lb_target_group.app_blue.arn
+        arn    = aws_lb_target_group.app_blue_v3.arn
         weight = var.traffic_distribution_blue
       }
 
       target_group {
-        arn    = aws_lb_target_group.app_green.arn
+        arn    = aws_lb_target_group.app_green_v3.arn
         weight = var.traffic_distribution_green
       }
 

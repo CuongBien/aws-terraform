@@ -17,7 +17,7 @@ output "web_target_group_blue_arn" {
 }
 
 output "app_target_group_blue_arn" {
-  value       = aws_lb_target_group.app_blue.arn
+  value       = aws_lb_target_group.app_blue_v3.arn
   description = "ARN of App Blue Target Group"
 }
 
@@ -28,7 +28,7 @@ output "web_target_group_green_arn" {
 }
 
 output "app_target_group_green_arn" {
-  value       = aws_lb_target_group.app_green.arn
+  value       = aws_lb_target_group.app_green_v3.arn
   description = "ARN of App Green Target Group"
 }
 
