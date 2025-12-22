@@ -247,6 +247,16 @@ resource "aws_security_group_rule" "db_ingress_from_app" {
   description              = "Allow MySQL from App tier"
 }
 
+resource "aws_security_group_rule" "db_ingress_from_bastion" {
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion.id
+  security_group_id        = aws_security_group.db.id
+  description              = "Allow MySQL from Bastion for SSH tunnel"
+}
+
 resource "aws_security_group_rule" "db_egress_all" {
   type              = "egress"
   from_port         = 0
