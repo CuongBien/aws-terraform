@@ -24,13 +24,13 @@ output "db_name" {
 
 output "db_username" {
   description = "The master username"
-  value       = data.aws_db_instance.main.username
+  value       = data.aws_db_instance.main.master_username
   sensitive   = true
 }
 
 output "db_arn" {
   description = "The ARN of the RDS instance"
-  value       = data.aws_db_instance.main.arn
+  value       = data.aws_db_instance.main.db_instance_arn
 }
 
 output "db_subnet_group_name" {
