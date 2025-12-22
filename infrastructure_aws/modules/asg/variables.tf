@@ -12,7 +12,7 @@ variable "web_ami_id" {
 variable "app_ami_id" {
   description = "AMI ID for app"
   type        = string
-  default     = "ami-0540d3917795ab713"
+  default     = "ami-0e7d3158cc33a26b2"  # Packer v1.0
 }
 
 variable "instance_type" {

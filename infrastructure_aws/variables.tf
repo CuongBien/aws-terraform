@@ -118,7 +118,7 @@ variable "web_desired_capacity" {
 variable "app_ami_id" {
   description = "AMI ID for app tier blue environment"
   type        = string
-  default     = "ami-0540d3917795ab713"
+  default     = "ami-0e7d3158cc33a26b2"  # Packer v1.0
 }
 
 variable "app_ami_id_green" {
