@@ -1,0 +1,150 @@
+#!/bin/bash
+# ========================================
+# App Tier User-Data - Docker Deployment
+# Purpose: Pull and run backend container
+# ========================================
+
+set -xeuo pipefail
+
+log() { echo "[app-docker] $*"; }
+
+# ===== Variables from Terraform =====
+ECR_REGISTRY="${ecr_registry}"
+BACKEND_IMAGE_TAG="${backend_image_tag}"
+DB_HOST="${db_host}"
+DB_USER="${db_username}"
+DB_PASSWORD="${db_password}"
+DB_NAME="${db_name}"
+AWS_REGION="${aws_region}"
+
+log "Starting app tier deployment..."
+log "Image: $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG"
+
+# ===== 1. Login to ECR =====
+log "Logging into ECR..."
+aws ecr get-login-password --region $AWS_REGION | \
+  docker login --username AWS --password-stdin $ECR_REGISTRY
+
+# ===== 2. Pull Backend Image =====
+log "Pulling backend image..."
+docker pull $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG
+
+# ===== 3. Stop old container (if exists) =====
+log "Stopping old container..."
+docker stop ecommerce-backend || true
+docker rm ecommerce-backend || true
+
+# ===== 4. Test Database Connection =====
+log "Testing database connection..."
+docker run --rm \
+  -e DB_HOST=$DB_HOST \
+  -e DB_USER=$DB_USER \
+  -e DB_PASSWORD=$DB_PASSWORD \
+  -e DB_NAME=$DB_NAME \
+  $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG \
+  node -e "const mysql=require('mysql2/promise');mysql.createConnection({host:process.env.DB_HOST,user:process.env.DB_USER,password:process.env.DB_PASSWORD}).then(()=>{console.log('DB OK');process.exit(0)}).catch(e=>{console.error('DB FAIL:',e.message);process.exit(1)})"
+
+if [ $? -ne 0 ]; then
+  log "ERROR: Database connection failed!"
+  exit 1
+fi
+
+log "Database connection successful!"
+
+# ===== 5. Run Backend Container =====
+log "Starting backend container..."
+docker run -d \
+  --name ecommerce-backend \
+  --restart always \
+  -p 8080:3000 \
+  -e DB_HOST=$DB_HOST \
+  -e DB_USER=$DB_USER \
+  -e DB_PASSWORD=$DB_PASSWORD \
+  -e DB_NAME=$DB_NAME \
+  -e PORT=3000 \
+  -e NODE_ENV=production \
+  --log-driver=awslogs \
+  --log-opt awslogs-group="/aws/ec2/ecommerce/app" \
+  --log-opt awslogs-region=$AWS_REGION \
+  --log-opt awslogs-stream="$(ec2-metadata --instance-id | cut -d ' ' -f 2)" \
+  $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG
+
+# ===== 6. Health Check =====
+log "Waiting for container to be healthy..."
+for i in {1..30}; do
+  if docker exec ecommerce-backend node -e "require('http').get('http://localhost:3000/health',(r)=>process.exit(r.statusCode===200?0:1))" &>/dev/null; then
+    log "Backend container is healthy!"
+    break
+  fi
+  log "Waiting for health check... ($i/30)"
+  sleep 2
+done
+
+# ===== 7. Verify Database Initialization =====
+log "Verifying database schema..."
+docker exec ecommerce-backend node -e "
+const mysql = require('mysql2/promise');
+(async () => {
+  const conn = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
+  });
+  const [tables] = await conn.query('SHOW TABLES');
+  console.log('Tables:', tables.length);
+  await conn.end();
+  process.exit(tables.length >= 4 ? 0 : 1);
+})();
+" || log "WARNING: Database schema may not be initialized"
+
+# ===== 8. CloudWatch Agent (optional) =====
+log "Configuring CloudWatch agent..."
+cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
+{
+  "metrics": {
+    "namespace": "Ecommerce/App",
+    "metrics_collected": {
+      "cpu": {
+        "measurement": [{"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"}],
+        "metrics_collection_interval": 60
+      },
+      "mem": {
+        "measurement": [{"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"}],
+        "metrics_collection_interval": 60
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/cloud-init-output.log",
+            "log_group_name": "/aws/ec2/ecommerce/app",
+            "log_stream_name": "{instance_id}/cloud-init"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json \
+  -s || log "CloudWatch agent not available"
+
+log "App tier deployment complete!"
+log "Container status:"
+docker ps -a --filter name=ecommerce-backend
+
+# ===== 9. Display useful info =====
+log "Deployment Summary:"
+log "  Backend Image: $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG"
+log "  Database: $DB_HOST"
+log "  Port: 8080 -> 3000"
+log "  Logs: docker logs ecommerce-backend"

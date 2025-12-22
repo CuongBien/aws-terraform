@@ -12,6 +12,16 @@ packer {
 }
 
 # Variables
+variable "color" {
+  type        = string
+  description = "Deployment color (blue or green)"
+  default     = "blue"
+  validation {
+    condition     = contains(["blue", "green"], var.color)
+    error_message = "Color must be 'blue' or 'green'."
+  }
+}
+
 variable "aws_region" {
   type    = string
   default = "ap-southeast-2"

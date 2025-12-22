@@ -1,0 +1,207 @@
+// ========================================
+// Simple Jenkins Pipeline for Docker Build & Deploy
+// Purpose: Build images, push to ECR, restart containers
+// ========================================
+
+pipeline {
+    agent any
+    
+    environment {
+        AWS_REGION = 'ap-southeast-2'
+        ECR_REGISTRY = '120915930136.dkr.ecr.ap-southeast-2.amazonaws.com'
+        FRONTEND_IMAGE = "${ECR_REGISTRY}/ecommerce-frontend"
+        BACKEND_IMAGE = "${ECR_REGISTRY}/ecommerce-backend"
+        IMAGE_TAG = 'latest'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Checking out code...'
+                checkout scm
+            }
+        }
+        
+        stage('Login to ECR') {
+            steps {
+                script {
+                    echo '🔐 Logging into ECR...'
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    """
+                }
+            }
+        }
+        
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        dir('ecommerce-app/frontend') {
+                            echo '🏗️ Building frontend image...'
+                            sh """
+                                docker build -t ${FRONTEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+                
+                stage('Build Backend') {
+                    steps {
+                        dir('ecommerce-app/backend') {
+                            echo '🏗️ Building backend image...'
+                            sh """
+                                docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Push to ECR') {
+            parallel {
+                stage('Push Frontend') {
+                    steps {
+                        echo '📤 Pushing frontend image to ECR...'
+                        sh """
+                            docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                            docker push ${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+                        """
+                    }
+                }
+                
+                stage('Push Backend') {
+                    steps {
+                        echo '📤 Pushing backend image to ECR...'
+                        sh """
+                            docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                            docker push ${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Restart Containers') {
+            steps {
+                script {
+                    echo '🔄 Restarting containers on EC2...'
+                    
+                    // Get Internal ALB DNS for frontend nginx config
+                    def internalAlbDns = sh(
+                        script: "aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-internal-alb --query 'LoadBalancers[0].DNSName' --output text",
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Internal ALB DNS: ${internalAlbDns}"
+                    
+                    // Restart Web Tier
+                    sh """
+                        aws ssm send-command \
+                            --region ${AWS_REGION} \
+                            --document-name "AWS-RunShellScript" \
+                            --targets "Key=tag:Tier,Values=web" \
+                            --parameters 'commands=[
+                                "echo Deploying frontend build ${BUILD_NUMBER}",
+                                "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                "docker pull ${FRONTEND_IMAGE}:${IMAGE_TAG}",
+                                "docker stop ecommerce-frontend 2>/dev/null || true",
+                                "docker rm ecommerce-frontend 2>/dev/null || true",
+                                "docker run -d --name ecommerce-frontend --restart always -p 80:80 -e INTERNAL_ALB_DNS=${internalAlbDns} ${FRONTEND_IMAGE}:${IMAGE_TAG}",
+                                "echo Frontend deployed successfully"
+                            ]' \
+                            --comment "Deploy frontend build ${BUILD_NUMBER}"
+                    """
+                    
+                    // Wait a bit
+                    sleep 5
+                    
+                    // Restart App Tier
+                    sh """
+                        aws ssm send-command \
+                            --region ${AWS_REGION} \
+                            --document-name "AWS-RunShellScript" \
+                            --targets "Key=tag:Tier,Values=app" \
+                            --parameters 'commands=[
+                                "echo Deploying backend build ${BUILD_NUMBER}",
+                                "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                "docker pull ${BACKEND_IMAGE}:${IMAGE_TAG}",
+                                "docker stop ecommerce-backend 2>/dev/null || true",
+                                "docker rm ecommerce-backend 2>/dev/null || true",
+                                "docker run -d --name ecommerce-backend --restart always -p 8080:3000 -e DB_HOST=pbl4-three-tier-db.czswisyugtyb.ap-southeast-2.rds.amazonaws.com -e DB_USER=admin -e DB_PASSWORD=pbl4-123456 -e DB_NAME=ecommerce ${BACKEND_IMAGE}:${IMAGE_TAG}",
+                                "echo Backend deployed successfully"
+                            ]' \
+                            --comment "Deploy backend build ${BUILD_NUMBER}"
+                    """
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                script {
+                    echo '🏥 Checking deployment health...'
+                    sleep 30 // Wait for containers to fully start
+                    
+                    // Get Public ALB DNS
+                    def publicAlbDns = sh(
+                        script: "aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-alb --query 'LoadBalancers[0].DNSName' --output text",
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Testing public URL: http://${publicAlbDns}"
+                    
+                    // Simple health check
+                    def healthCheck = sh(
+                        script: "curl -s -o /dev/null -w '%{http_code}' http://${publicAlbDns}/health || echo 000",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (healthCheck == '200') {
+                        echo "✅ Health check passed (HTTP ${healthCheck})"
+                    } else {
+                        echo "⚠️ Health check returned HTTP ${healthCheck}"
+                    }
+                }
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                echo '🧹 Cleaning up local Docker images...'
+                sh """
+                    docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} 2>/dev/null || true
+                    docker rmi ${FRONTEND_IMAGE}:build-${BUILD_NUMBER} 2>/dev/null || true
+                    docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG} 2>/dev/null || true
+                    docker rmi ${BACKEND_IMAGE}:build-${BUILD_NUMBER} 2>/dev/null || true
+                    docker system prune -f || true
+                """
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ ========================================='
+            echo '✅ DEPLOYMENT SUCCESSFUL!'
+            echo '✅ ========================================='
+            echo "Frontend: ${FRONTEND_IMAGE}:${IMAGE_TAG}"
+            echo "Backend: ${BACKEND_IMAGE}:${IMAGE_TAG}"
+            echo "Build: #${BUILD_NUMBER}"
+            echo '========================================='
+        }
+        failure {
+            echo '❌ ========================================='
+            echo '❌ DEPLOYMENT FAILED!'
+            echo '❌ ========================================='
+        }
+        always {
+            echo '🧹 Cleaning workspace...'
+            cleanWs()
+        }
+    }
+}

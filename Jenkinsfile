@@ -12,11 +12,18 @@ pipeline {
         choice(name: 'DEPLOYMENT_TARGET', choices: ['green','blue'])
         choice(name: 'TRAFFIC_SPLIT', choices: ['canary-10','half-50','full-100'])
         booleanParam(name: 'SKIP_TESTS', defaultValue: false)
+        booleanParam(name: 'SKIP_DOCKER_BUILD', defaultValue: false, description: 'Skip Docker image build & push')
     }
 
     environment {
         AWS_REGION   = 'ap-southeast-2'
         PROJECT_NAME = 'pbl4-three-tier'
+
+        // Docker/ECR
+        ECR_REGISTRY = '120915930136.dkr.ecr.ap-southeast-2.amazonaws.com'
+        FRONTEND_IMAGE = "${ECR_REGISTRY}/ecommerce-frontend"
+        BACKEND_IMAGE = "${ECR_REGISTRY}/ecommerce-backend"
+        IMAGE_TAG = 'latest'
 
         TF_ORG       = 'CBien'
         TF_WORKSPACE = 'aws-terraform-vcs'
@@ -64,6 +71,80 @@ pipeline {
                     --config-file .checkov.yml \
                     --soft-fail
                 '''
+            }
+        }
+
+        /* ========== DOCKER: LOGIN ECR ========== */
+        stage('🐳 Login to ECR') {
+            when {
+                expression { params.SKIP_DOCKER_BUILD == false }
+            }
+            steps {
+                echo '🔐 Logging into Amazon ECR...'
+                sh """
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                """
+            }
+        }
+
+        /* ========== DOCKER: BUILD IMAGES ========== */
+        stage('🐳 Build Docker Images') {
+            when {
+                expression { params.SKIP_DOCKER_BUILD == false }
+            }
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        dir('ecommerce-app/frontend') {
+                            echo "🏗️ Building frontend image..."
+                            sh """
+                                docker build -t ${FRONTEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+                
+                stage('Build Backend') {
+                    steps {
+                        dir('ecommerce-app/backend') {
+                            echo "🏗️ Building backend image..."
+                            sh """
+                                docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} .
+                                docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        /* ========== DOCKER: PUSH TO ECR ========== */
+        stage('🐳 Push to ECR') {
+            when {
+                expression { params.SKIP_DOCKER_BUILD == false }
+            }
+            parallel {
+                stage('Push Frontend') {
+                    steps {
+                        echo "📤 Pushing frontend to ECR..."
+                        sh """
+                            docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                            docker push ${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+                        """
+                    }
+                }
+                
+                stage('Push Backend') {
+                    steps {
+                        echo "📤 Pushing backend to ECR..."
+                        sh """
+                            docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                            docker push ${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+                        """
+                    }
+                }
             }
         }
 

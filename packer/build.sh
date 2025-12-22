@@ -64,8 +64,6 @@ build_ami() {
     
     print_step "Building ${tier} server AMI - Version ${version}"
     
-    cd packer
-    
     # Initialize Packer
     packer init ${tier}-server.pkr.hcl
     

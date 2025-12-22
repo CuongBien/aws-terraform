@@ -78,6 +78,32 @@ variable "internal_alb_dns_name" {
   type        = string
 }
 
+# ===== Docker Deployment Variables =====
+
+variable "use_docker_deployment" {
+  description = "Use Docker-based deployment"
+  type        = bool
+  default     = true
+}
+
+variable "ecr_registry" {
+  description = "ECR registry URL"
+  type        = string
+  default     = "120915930136.dkr.ecr.ap-southeast-2.amazonaws.com"
+}
+
+variable "frontend_image_tag" {
+  description = "Docker image tag for frontend"
+  type        = string
+  default     = "latest"
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-southeast-2"
+}
+
 # ===== BLUE/GREEN ENVIRONMENT CONTROL =====
 
 variable "enable_blue_env" {

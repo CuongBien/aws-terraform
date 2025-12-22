@@ -24,6 +24,20 @@ sudo yum install -y \
   vim \
   htop
 
+# Install Docker
+echo "==> Installing Docker"
+sudo yum install -y docker
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -a -G docker ec2-user
+
+# Install AWS CLI v2 for ECR access
+echo "==> Installing AWS CLI v2"
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+sudo ./aws/install
+rm -rf aws awscliv2.zip
+
 # Configure Nginx
 echo "==> Configuring Nginx"
 cat <<'EOF' | sudo tee /etc/nginx/nginx.conf

@@ -95,6 +95,32 @@ variable "db_name" {
   type        = string
 }
 
+# ===== Docker Deployment Variables =====
+
+variable "use_docker_deployment" {
+  description = "Use Docker-based deployment"
+  type        = bool
+  default     = true
+}
+
+variable "ecr_registry" {
+  description = "ECR registry URL"
+  type        = string
+  default     = "120915930136.dkr.ecr.ap-southeast-2.amazonaws.com"
+}
+
+variable "backend_image_tag" {
+  description = "Docker image tag for backend"
+  type        = string
+  default     = "latest"
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-southeast-2"
+}
+
 variable "alb_dns_name" {
   description = "DNS name of the public ALB (for shop_url in config)"
   type        = string

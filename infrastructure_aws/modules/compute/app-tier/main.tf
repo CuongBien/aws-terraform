@@ -19,14 +19,25 @@ resource "aws_launch_template" "app_blue" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_app_simple.sh.tftpl", {
-    db_host      = var.db_host
-    db_username  = var.db_username
-    db_password  = var.db_password
-    db_name      = var.db_name
-    project_name = var.project_name
-    environment  = "blue"
-  }))
+  user_data = base64encode(templatefile(
+    var.use_docker_deployment ? "${path.module}/../../asg/user_data_app_docker.sh.tftpl" : "${path.module}/user_data_app_simple.sh.tftpl",
+    var.use_docker_deployment ? {
+      ecr_registry       = var.ecr_registry
+      backend_image_tag  = var.backend_image_tag
+      db_host            = var.db_host
+      db_username        = var.db_username
+      db_password        = var.db_password
+      db_name            = var.db_name
+      aws_region         = var.aws_region
+    } : {
+      db_host      = var.db_host
+      db_username  = var.db_username
+      db_password  = var.db_password
+      db_name      = var.db_name
+      project_name = var.project_name
+      environment  = "blue"
+    }
+  ))
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -117,14 +128,25 @@ resource "aws_launch_template" "app_green" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_app_simple.sh.tftpl", {
-    db_host      = var.db_host
-    db_username  = var.db_username
-    db_password  = var.db_password
-    db_name      = var.db_name
-    project_name = var.project_name
-    environment  = "green"
-  }))
+  user_data = base64encode(templatefile(
+    var.use_docker_deployment ? "${path.module}/../../asg/user_data_app_docker.sh.tftpl" : "${path.module}/user_data_app_simple.sh.tftpl",
+    var.use_docker_deployment ? {
+      ecr_registry       = var.ecr_registry
+      backend_image_tag  = var.backend_image_tag
+      db_host            = var.db_host
+      db_username        = var.db_username
+      db_password        = var.db_password
+      db_name            = var.db_name
+      aws_region         = var.aws_region
+    } : {
+      db_host      = var.db_host
+      db_username  = var.db_username
+      db_password  = var.db_password
+      db_name      = var.db_name
+      project_name = var.project_name
+      environment  = "green"
+    }
+  ))
 
   metadata_options {
     http_endpoint               = "enabled"

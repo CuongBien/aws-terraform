@@ -10,6 +10,12 @@ variable "project_name" {
   default     = "pbl4-three-tier"
 }
 
+variable "aws_region" {
+  description = "AWS region for all resources"
+  type        = string
+  default     = "ap-southeast-2"
+}
+
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
@@ -69,6 +75,32 @@ variable "enable_ssm_vpc_endpoint" {
   default     = true
 }
 
+# ===== DOCKER DEPLOYMENT CONFIGURATION =====
+
+variable "use_docker_deployment" {
+  description = "Use Docker-based deployment instead of traditional AMI deployment"
+  type        = bool
+  default     = true  # Always use Docker
+}
+
+variable "ecr_registry" {
+  description = "ECR registry URL"
+  type        = string
+  default     = "120915930136.dkr.ecr.ap-southeast-2.amazonaws.com"
+}
+
+variable "frontend_image_tag" {
+  description = "Docker image tag for frontend (e.g., v1.0, latest)"
+  type        = string
+  default     = "latest"  # Always pull latest
+}
+
+variable "backend_image_tag" {
+  description = "Docker image tag for backend (e.g., v1.0, latest)"
+  type        = string
+  default     = "latest"  # Always pull latest
+}
+
 # ===== EC2 CONFIGURATION =====
 
 variable "key_pair_name" {
@@ -81,13 +113,13 @@ variable "key_pair_name" {
 variable "web_ami_id_blue" {
   description = "AMI ID for web tier blue environment"
   type        = string
-  default     = "ami-039c813819c142011"
+  default     = "ami-0cf771f557cd2c733"  # Docker base
 }
 
 variable "web_ami_id_green" {
   description = "AMI ID for web tier green environment (optional)"
   type        = string
-  default     = ""
+  default     = "ami-0cf771f557cd2c733"  # Same as blue for Docker deployment
 }
 
 variable "web_instance_type" {
@@ -118,13 +150,13 @@ variable "web_desired_capacity" {
 variable "app_ami_id_blue" {
   description = "AMI ID for app tier blue environment"
   type        = string
-  default     = "ami-0e7d3158cc33a26b2"  # Packer v1.0
+  default     = "ami-0cb5ffeec8df16819"  # Docker base
 }
 
 variable "app_ami_id_green" {
   description = "AMI ID for app tier green environment (optional)"
   type        = string
-  default     = ""
+  default     = "ami-0cb5ffeec8df16819"  # Same as blue for Docker deployment
 }
 
 variable "app_instance_type" {

@@ -1,0 +1,254 @@
+@Library('pbl4-shared-library') _
+
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    parameters {
+        choice(name: 'DEPLOYMENT_TARGET', choices: ['green', 'blue'], description: 'Deploy to which environment')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+    }
+
+    environment {
+        AWS_REGION = 'ap-southeast-2'
+        AWS_ACCOUNT_ID = '120915930136'
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        FRONTEND_REPO = 'ecommerce-frontend'
+        BACKEND_REPO = 'ecommerce-backend'
+        PROJECT_NAME = 'pbl4-three-tier'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+                    env.BUILD_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        dir('ecommerce-app/frontend') {
+                            script {
+                                sh """
+                                    echo "Building frontend image..."
+                                    docker build -t ${FRONTEND_REPO}:${BUILD_TAG} .
+                                    docker tag ${FRONTEND_REPO}:${BUILD_TAG} ${FRONTEND_REPO}:latest
+                                    docker tag ${FRONTEND_REPO}:${BUILD_TAG} ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_TAG}
+                                    docker tag ${FRONTEND_REPO}:${BUILD_TAG} ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
+                                """
+                            }
+                        }
+                    }
+                }
+                
+                stage('Build Backend') {
+                    steps {
+                        dir('ecommerce-app/backend') {
+                            script {
+                                sh """
+                                    echo "Building backend image..."
+                                    docker build -t ${BACKEND_REPO}:${BUILD_TAG} .
+                                    docker tag ${BACKEND_REPO}:${BUILD_TAG} ${BACKEND_REPO}:latest
+                                    docker tag ${BACKEND_REPO}:${BUILD_TAG} ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_TAG}
+                                    docker tag ${BACKEND_REPO}:${BUILD_TAG} ${ECR_REGISTRY}/${BACKEND_REPO}:latest
+                                """
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                    script {
+                        sh """
+                            echo "Logging in to ECR..."
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                                docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            echo "Pushing frontend image..."
+                            docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_TAG}
+                            docker push ${ECR_REGISTRY}/${FRONTEND_REPO}:latest
+                            
+                            echo "Pushing backend image..."
+                            docker push ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_TAG}
+                            docker push ${ECR_REGISTRY}/${BACKEND_REPO}:latest
+                            
+                            echo "✓ Images pushed successfully"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Web Tier') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                    script {
+                        sh """
+                            echo "Deploying frontend to ${params.DEPLOYMENT_TARGET} web instances..."
+                            
+                            # Get instance IDs
+                            INSTANCE_IDS=\$(aws ec2 describe-instances \
+                                --filters \
+                                    "Name=tag:Environment,Values=${params.DEPLOYMENT_TARGET}" \
+                                    "Name=tag:Tier,Values=web" \
+                                    "Name=instance-state-name,Values=running" \
+                                --query "Reservations[*].Instances[*].InstanceId" \
+                                --output text \
+                                --region ${AWS_REGION})
+                            
+                            if [ -z "\$INSTANCE_IDS" ]; then
+                                echo "No running web instances found for ${params.DEPLOYMENT_TARGET}"
+                                exit 1
+                            fi
+                            
+                            echo "Found instances: \$INSTANCE_IDS"
+                            
+                            # Deploy via SSM
+                            for INSTANCE_ID in \$INSTANCE_IDS; do
+                                echo "Deploying to \$INSTANCE_ID..."
+                                aws ssm send-command \
+                                    --instance-ids \$INSTANCE_ID \
+                                    --document-name "AWS-RunShellScript" \
+                                    --parameters 'commands=[
+                                        "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                        "docker pull ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_TAG}",
+                                        "docker stop ecommerce-frontend || true",
+                                        "docker rm ecommerce-frontend || true",
+                                        "docker run -d --name ecommerce-frontend -p 80:80 --restart always ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_TAG}",
+                                        "docker image prune -f"
+                                    ]' \
+                                    --region ${AWS_REGION} \
+                                    --output text
+                            done
+                            
+                            echo "✓ Frontend deployed to web tier"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to App Tier') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                    script {
+                        sh """
+                            echo "Deploying backend to ${params.DEPLOYMENT_TARGET} app instances..."
+                            
+                            # Get RDS endpoint
+                            RDS_ENDPOINT=\$(aws rds describe-db-instances \
+                                --db-instance-identifier ${PROJECT_NAME}-db \
+                                --query 'DBInstances[0].Endpoint.Address' \
+                                --output text \
+                                --region ${AWS_REGION})
+                            
+                            # Get instance IDs
+                            INSTANCE_IDS=\$(aws ec2 describe-instances \
+                                --filters \
+                                    "Name=tag:Environment,Values=${params.DEPLOYMENT_TARGET}" \
+                                    "Name=tag:Tier,Values=app" \
+                                    "Name=instance-state-name,Values=running" \
+                                --query "Reservations[*].Instances[*].InstanceId" \
+                                --output text \
+                                --region ${AWS_REGION})
+                            
+                            if [ -z "\$INSTANCE_IDS" ]; then
+                                echo "No running app instances found for ${params.DEPLOYMENT_TARGET}"
+                                exit 1
+                            fi
+                            
+                            echo "Found instances: \$INSTANCE_IDS"
+                            echo "RDS Endpoint: \$RDS_ENDPOINT"
+                            
+                            # Deploy via SSM
+                            for INSTANCE_ID in \$INSTANCE_IDS; do
+                                echo "Deploying to \$INSTANCE_ID..."
+                                aws ssm send-command \
+                                    --instance-ids \$INSTANCE_ID \
+                                    --document-name "AWS-RunShellScript" \
+                                    --parameters commands='[
+                                        "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                        "docker pull ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_TAG}",
+                                        "docker stop ecommerce-backend || true",
+                                        "docker rm ecommerce-backend || true",
+                                        "docker run -d --name ecommerce-backend -p 3000:3000 --restart always -e DB_HOST='\$RDS_ENDPOINT' -e DB_USER=admin -e DB_PASSWORD=pbl4-123456 -e DB_NAME=ecommerce ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_TAG}",
+                                        "docker image prune -f"
+                                    ]' \
+                                    --region ${AWS_REGION} \
+                                    --output text
+                            done
+                            
+                            echo "✓ Backend deployed to app tier"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                script {
+                    sh """
+                        echo "Waiting for deployment to stabilize..."
+                        sleep 30
+                        
+                        echo "Checking ${params.DEPLOYMENT_TARGET} target group health..."
+                        TG_ARN=\$(aws elbv2 describe-target-groups \
+                            --region ${AWS_REGION} \
+                            --names ${PROJECT_NAME}-web-tg-${params.DEPLOYMENT_TARGET} \
+                            --query 'TargetGroups[0].TargetGroupArn' \
+                            --output text)
+                        
+                        HEALTHY=\$(aws elbv2 describe-target-health \
+                            --region ${AWS_REGION} \
+                            --target-group-arn \$TG_ARN \
+                            --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \
+                            --output text)
+                        
+                        echo "Healthy targets: \$HEALTHY"
+                        
+                        if [ "\$HEALTHY" -ge 1 ]; then
+                            echo "✓ Health check passed"
+                        else
+                            echo "✗ Health check failed - no healthy targets"
+                            exit 1
+                        fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✓ Docker deployment completed successfully!"
+            echo "Frontend: ${ECR_REGISTRY}/${FRONTEND_REPO}:${BUILD_TAG}"
+            echo "Backend: ${ECR_REGISTRY}/${BACKEND_REPO}:${BUILD_TAG}"
+        }
+        failure {
+            echo "✗ Docker deployment failed!"
+        }
+        always {
+            sh """
+                docker image prune -f || true
+            """
+        }
+    }
+}

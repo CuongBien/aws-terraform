@@ -48,6 +48,37 @@ variable "max_size" {
   default     = 3
 }
 
+# ===== Docker Deployment Variables =====
+variable "ecr_registry" {
+  description = "ECR registry URL"
+  type        = string
+  default     = "120915930136.dkr.ecr.ap-southeast-2.amazonaws.com"
+}
+
+variable "frontend_image_tag" {
+  description = "Docker image tag for frontend"
+  type        = string
+  default     = "latest"
+}
+
+variable "backend_image_tag" {
+  description = "Docker image tag for backend"
+  type        = string
+  default     = "latest"
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-southeast-2"
+}
+
+variable "use_docker_deployment" {
+  description = "Use Docker-based deployment instead of traditional AMI deployment"
+  type        = bool
+  default     = true
+}
+
 variable "desired_capacity" {
   description = "Desired capacity of ASG"
   type        = number

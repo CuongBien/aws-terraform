@@ -119,6 +119,12 @@ module "web_tier" {
   web_target_group_green_arn = module.alb.web_target_group_green_arn
   internal_alb_dns_name      = module.alb.internal_alb_dns_name
 
+  # Docker deployment
+  use_docker_deployment = var.use_docker_deployment
+  ecr_registry          = var.ecr_registry
+  frontend_image_tag    = var.frontend_image_tag
+  aws_region            = var.aws_region
+
   enable_blue_env  = var.enable_blue_env
   enable_green_env = var.enable_green_env
 }
@@ -147,6 +153,12 @@ module "app_tier" {
   db_username = var.db_username
   db_password = var.db_password
   db_name     = module.rds.db_name
+
+  # Docker deployment
+  use_docker_deployment = var.use_docker_deployment
+  ecr_registry          = var.ecr_registry
+  backend_image_tag     = var.backend_image_tag
+  aws_region            = var.aws_region
 
   alb_dns_name = module.alb.alb_dns_name
 
