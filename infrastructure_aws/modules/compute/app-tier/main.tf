@@ -95,6 +95,9 @@ resource "aws_autoscaling_group" "app_blue" {
   ]
 
   metrics_granularity = "1Minute"
+  
+  force_delete              = true
+  wait_for_capacity_timeout = "0"
 
   lifecycle {
     create_before_destroy = true
@@ -204,6 +207,9 @@ resource "aws_autoscaling_group" "app_green" {
   ]
 
   metrics_granularity = "1Minute"
+  
+  force_delete              = true
+  wait_for_capacity_timeout = "0"
 
   lifecycle {
     create_before_destroy = true
