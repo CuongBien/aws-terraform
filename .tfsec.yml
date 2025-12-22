@@ -13,6 +13,7 @@
     - aws-elb-http-not-used
     - aws-ec2-no-public-ip-subnet
     - aws-iam-no-policy-wildcards
+    - aws-ecr-enforce-immutable-repository  # Required for Docker latest tag strategy
 
   # Severity levels to report (only HIGH and CRITICAL)
   severity_overrides:
