@@ -128,7 +128,7 @@ module "app_tier" {
   source = "./modules/compute/app-tier"
 
   project_name              = var.project_name
-  app_ami_id                = var.app_ami_id
+  app_ami_id                = var.app_ami_id_blue
   app_ami_id_green          = var.app_ami_id_green
   instance_type             = var.app_instance_type
   key_pair_name             = var.key_pair_name
