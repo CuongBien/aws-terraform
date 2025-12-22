@@ -1,8 +1,5 @@
 @Library('pbl4-shared-library') _
 
-// DEPLOYMENT PIPELINE - Deploy pre-built AMIs with traffic shifting
-// Use Jenkinsfile.build to create new AMIs first
-
 pipeline {
     agent any
 
@@ -12,9 +9,9 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'DEPLOYMENT_TARGET', choices: ['green','blue'], description: 'Which environment to deploy')
-        choice(name: 'TRAFFIC_SPLIT', choices: ['canary-10','half-50','full-100'], description: 'Traffic distribution')
-        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip health checks')
+        choice(name: 'DEPLOYMENT_TARGET', choices: ['green','blue'])
+        choice(name: 'TRAFFIC_SPLIT', choices: ['canary-10','half-50','full-100'])
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false)
     }
 
     environment {
@@ -177,38 +174,24 @@ pipeline {
             when { expression { !params.SKIP_TESTS } }
             steps {
                 withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
-                    sh '''
-                    TG_ARN=$(aws elbv2 describe-target-groups \\
-                    --region ${AWS_REGION} \\
-                    --names ${PROJECT_NAME}-web-tg-${params.DEPLOYMENT_TARGET} \\
-                    --query 'TargetGroups[0].TargetGroupArn' \\
-                    --output text)
+                    sh """
+                    TG_ARN=\$(aws elbv2 describe-target-groups \
+                      --region ${AWS_REGION} \
+                      --names ${PROJECT_NAME}-web-tg-${params.DEPLOYMENT_TARGET} \
+                      --query 'TargetGroups[0].TargetGroupArn' \
+                      --output text)
 
-                    echo "Checking target health for: $TG_ARN"
-                    COUNTER=0
-                    MAX_ATTEMPTS=60
-                    
-                    while [ $COUNTER -lt $MAX_ATTEMPTS ]; do
-                    HEALTHY=$(aws elbv2 describe-target-health \\
-                        --region ${AWS_REGION} \\
-                        --target-group-arn $TG_ARN \\
-                        --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \\
+                    for i in {1..30}; do
+                      HEALTHY=\$(aws elbv2 describe-target-health \
+                        --region ${AWS_REGION} \
+                        --target-group-arn \$TG_ARN \
+                        --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \
                         --output text)
-                    
-                    echo "Attempt $((COUNTER+1))/$MAX_ATTEMPTS: $HEALTHY healthy target(s)"
-                    
-                    if [ "$HEALTHY" -ge 1 ]; then
-                        echo "✅ Health check passed"
-                        exit 0
-                    fi
-                    
-                    COUNTER=$((COUNTER+1))
-                    sleep 10
+                      [ "\$HEALTHY" -ge 1 ] && exit 0
+                      sleep 10
                     done
-                    
-                    echo "❌ Health check timeout after 10 minutes"
                     exit 1
-                    '''
+                    """
                 }
             }
         }
