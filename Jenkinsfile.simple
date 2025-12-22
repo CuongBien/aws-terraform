@@ -26,10 +26,17 @@ pipeline {
             steps {
                 script {
                     echo '🔐 Logging into ECR...'
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                    """
+                    withCredentials([
+                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh """
+                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        """
+                    }
                 }
             }
         }
@@ -91,52 +98,70 @@ pipeline {
                 script {
                     echo '🔄 Restarting containers on EC2...'
                     
-                    // Get Internal ALB DNS for frontend nginx config
-                    def internalAlbDns = sh(
-                        script: "aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-internal-alb --query 'LoadBalancers[0].DNSName' --output text",
-                        returnStdout: true
-                    ).trim()
-                    
-                    echo "Internal ALB DNS: ${internalAlbDns}"
-                    
-                    // Restart Web Tier
-                    sh """
-                        aws ssm send-command \
-                            --region ${AWS_REGION} \
-                            --document-name "AWS-RunShellScript" \
-                            --targets "Key=tag:Tier,Values=web" \
-                            --parameters 'commands=[
-                                "echo Deploying frontend build ${BUILD_NUMBER}",
-                                "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
-                                "docker pull ${FRONTEND_IMAGE}:${IMAGE_TAG}",
-                                "docker stop ecommerce-frontend 2>/dev/null || true",
-                                "docker rm ecommerce-frontend 2>/dev/null || true",
-                                "docker run -d --name ecommerce-frontend --restart always -p 80:80 -e INTERNAL_ALB_DNS=${internalAlbDns} ${FRONTEND_IMAGE}:${IMAGE_TAG}",
-                                "echo Frontend deployed successfully"
-                            ]' \
-                            --comment "Deploy frontend build ${BUILD_NUMBER}"
-                    """
-                    
-                    // Wait a bit
-                    sleep 5
+                    withCredentials([
+                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        // Get Internal ALB DNS for frontend nginx config
+                        def internalAlbDns = sh(
+                            script: """
+                                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                                aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-internal-alb --query 'LoadBalancers[0].DNSName' --output text
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Internal ALB DNS: ${internalAlbDns}"
+                        
+                        // Restart Web Tier
+                        sh """
+                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                            aws ssm send-command \
+                                --region ${AWS_REGION} \
+                                --document-name "AWS-RunShellScript" \
+                                --targets "Key=tag:Tier,Values=web" \
+                                --parameters 'commands=[
+                                    "echo Deploying frontend build ${BUILD_NUMBER}",
+                                    "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                    "docker pull ${FRONTEND_IMAGE}:${IMAGE_TAG}",
+                                    "docker stop ecommerce-frontend 2>/dev/null || true",
+                                    "docker rm ecommerce-frontend 2>/dev/null || true",
+                                    "docker run -d --name ecommerce-frontend --restart always -p 80:80 -e INTERNAL_ALB_DNS=${internalAlbDns} ${FRONTEND_IMAGE}:${IMAGE_TAG}",
+                                    "echo Frontend deployed successfully"
+                                ]' \
+                                --comment "Deploy frontend build ${BUILD_NUMBER}"
+                        """
+                        
+                        // Wait a bit
+                        sleep 5
+                    }
                     
                     // Restart App Tier
-                    sh """
-                        aws ssm send-command \
-                            --region ${AWS_REGION} \
-                            --document-name "AWS-RunShellScript" \
-                            --targets "Key=tag:Tier,Values=app" \
-                            --parameters 'commands=[
-                                "echo Deploying backend build ${BUILD_NUMBER}",
-                                "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
-                                "docker pull ${BACKEND_IMAGE}:${IMAGE_TAG}",
-                                "docker stop ecommerce-backend 2>/dev/null || true",
-                                "docker rm ecommerce-backend 2>/dev/null || true",
-                                "docker run -d --name ecommerce-backend --restart always -p 8080:3000 -e DB_HOST=pbl4-three-tier-db.czswisyugtyb.ap-southeast-2.rds.amazonaws.com -e DB_USER=admin -e DB_PASSWORD=pbl4-123456 -e DB_NAME=ecommerce ${BACKEND_IMAGE}:${IMAGE_TAG}",
-                                "echo Backend deployed successfully"
-                            ]' \
-                            --comment "Deploy backend build ${BUILD_NUMBER}"
-                    """
+                    withCredentials([
+                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh """
+                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                            aws ssm send-command \
+                                --region ${AWS_REGION} \
+                                --document-name "AWS-RunShellScript" \
+                                --targets "Key=tag:Tier,Values=app" \
+                                --parameters 'commands=[
+                                    "echo Deploying backend build ${BUILD_NUMBER}",
+                                    "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+                                    "docker pull ${BACKEND_IMAGE}:${IMAGE_TAG}",
+                                    "docker stop ecommerce-backend 2>/dev/null || true",
+                                    "docker rm ecommerce-backend 2>/dev/null || true",
+                                    "docker run -d --name ecommerce-backend --restart always -p 8080:3000 -e DB_HOST=pbl4-three-tier-db.czswisyugtyb.ap-southeast-2.rds.amazonaws.com -e DB_USER=admin -e DB_PASSWORD=pbl4-123456 -e DB_NAME=ecommerce ${BACKEND_IMAGE}:${IMAGE_TAG}",
+                                    "echo Backend deployed successfully"
+                                ]' \
+                                --comment "Deploy backend build ${BUILD_NUMBER}"
+                        """
+                    }
                 }
             }
         }
@@ -147,24 +172,33 @@ pipeline {
                     echo '🏥 Checking deployment health...'
                     sleep 30 // Wait for containers to fully start
                     
-                    // Get Public ALB DNS
-                    def publicAlbDns = sh(
-                        script: "aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-alb --query 'LoadBalancers[0].DNSName' --output text",
-                        returnStdout: true
-                    ).trim()
-                    
-                    echo "Testing public URL: http://${publicAlbDns}"
-                    
-                    // Simple health check
-                    def healthCheck = sh(
-                        script: "curl -s -o /dev/null -w '%{http_code}' http://${publicAlbDns}/health || echo 000",
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (healthCheck == '200') {
-                        echo "✅ Health check passed (HTTP ${healthCheck})"
-                    } else {
-                        echo "⚠️ Health check returned HTTP ${healthCheck}"
+                    withCredentials([
+                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        // Get Public ALB DNS
+                        def publicAlbDns = sh(
+                            script: """
+                                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                                aws elbv2 describe-load-balancers --region ${AWS_REGION} --names pbl4-three-tier-alb --query 'LoadBalancers[0].DNSName' --output text
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Testing public URL: http://${publicAlbDns}"
+                        
+                        // Simple health check
+                        def healthCheck = sh(
+                            script: "curl -s -o /dev/null -w '%{http_code}' http://${publicAlbDns}/health || echo 000",
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (healthCheck == '200') {
+                            echo "✅ Health check passed (HTTP ${healthCheck})"
+                        } else {
+                            echo "⚠️ Health check returned HTTP ${healthCheck}"
+                        }
                     }
                 }
             }
