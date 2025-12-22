@@ -305,7 +305,7 @@ variable "enable_blue_env" {
 variable "enable_green_env" {
   description = "Enable green environment (instances running)"
   type        = bool
-  default     = false
+  default     = true  # Enable for canary deployment
 }
 
 # ===== MONITORING CONFIGURATION =====
