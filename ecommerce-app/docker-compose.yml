@@ -7,27 +7,16 @@ services:
       dockerfile: Dockerfile
     container_name: ecommerce-backend
     environment:
-      - DB_HOST=host.docker.internal
-      - DB_USER=admin
-      - DB_PASSWORD=pbl4-123456
-      - DB_NAME=ecommerce
+      - DB_HOST=${DB_HOST:-localhost}
+      - DB_USER=${DB_USER:-admin}
+      - DB_PASSWORD=${DB_PASSWORD:-pbl4-123456}
+      - DB_NAME=${DB_NAME:-ecommerce}
       - PORT=3000
     ports:
       - "3000:3000"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
     networks:
       - ecommerce-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   frontend:
     build:
