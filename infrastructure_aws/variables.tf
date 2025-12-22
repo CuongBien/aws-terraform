@@ -78,7 +78,7 @@ variable "key_pair_name" {
 }
 
 # Web Tier
-variable "web_ami_id" {
+variable "web_ami_id_blue" {
   description = "AMI ID for web tier blue environment"
   type        = string
   default     = "ami-039c813819c142011"

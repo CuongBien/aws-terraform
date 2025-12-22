@@ -103,7 +103,7 @@ module "web_tier" {
   source = "./modules/compute/web-tier"
 
   project_name              = var.project_name
-  web_ami_id                = var.web_ami_id
+  web_ami_id                = var.web_ami_id_blue
   web_ami_id_green          = var.web_ami_id_green
   instance_type             = var.web_instance_type
   key_pair_name             = var.key_pair_name
