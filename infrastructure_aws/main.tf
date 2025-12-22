@@ -198,3 +198,9 @@ module "nacl" {
   app_private_subnet_cidrs = local.app_subnet_cidrs
   db_private_subnet_cidrs  = local.db_subnet_cidrs
 }
+
+# ===== IMPORT EXISTING RDS INSTANCE =====
+import {
+  to = module.rds.aws_db_instance.main
+  id = "pbl4-three-tier-db"
+}
