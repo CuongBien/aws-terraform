@@ -12,7 +12,15 @@ ENVIRONMENT="${environment}"
 log(){ echo "[app-user-data] $*"; }
 
 # ========= 1) Apache + PHP đã được baked vào AMI bởi Packer =========
-# Backend API code đã có sẵn tại /var/www/html/api/
+# Backend API code đã có sẵn tại /var/www/api/api/, cần copy vào document root
+
+# Copy backend code to document root
+if [ -d /var/www/api/api ]; then
+  log "Copying backend API to /var/www/html/api/"
+  sudo cp -r /var/www/api/api /var/www/html/
+  sudo chown -R apache:apache /var/www/html/api
+  sudo chmod -R 755 /var/www/html/api
+fi
 
 # Ensure Apache is running
 sudo systemctl enable --now httpd
