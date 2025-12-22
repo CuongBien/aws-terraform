@@ -100,7 +100,7 @@ pipeline {
                     
                     TG_ARN=\$(aws elbv2 describe-target-groups \
                         --region ${AWS_REGION} \
-                        --names ${PROJECT_NAME}-web-tg-${params.ROLLBACK_TO} \
+                        --names ${PROJECT_NAME}-web-v2-${params.ROLLBACK_TO} \
                         --query 'TargetGroups[0].TargetGroupArn' \
                         --output text)
 
