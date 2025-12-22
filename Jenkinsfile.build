@@ -1,0 +1,196 @@
+@Library('pbl4-shared-library') _
+
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    parameters {
+        choice(name: 'VERSION', choices: ['v2.0','v2.1','v2.2','v2.3'], description: 'Version number for new AMIs')
+        choice(name: 'BUILD_TARGET', choices: ['both','web-only','app-only'], description: 'Which AMIs to build')
+    }
+
+    environment {
+        AWS_REGION   = 'ap-southeast-2'
+        PROJECT_NAME = 'pbl4-three-tier'
+        TF_ORG       = 'CBien'
+        TF_WORKSPACE = 'aws-terraform-vcs'
+        TF_WORKSPACE_ID = 'ws-ZdCj4RaKxyFkwYuU'
+    }
+
+    stages {
+
+        /* ========== CHECKOUT ========== */
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+
+        /* ========== VALIDATE PACKER TEMPLATES ========== */
+        stage('Validate Packer Templates') {
+            steps {
+                dir('packer') {
+                    sh '''
+                    echo "Validating Packer templates..."
+                    packer init .
+                    packer validate -var="version=${VERSION}" -var="color=green" web-server.pkr.hcl
+                    packer validate -var="version=${VERSION}" app-server.pkr.hcl
+                    echo "✅ Templates valid"
+                    '''
+                }
+            }
+        }
+
+        /* ========== BUILD WEB AMI ========== */
+        stage('Build Web AMI') {
+            when {
+                expression { 
+                    params.BUILD_TARGET == 'both' || params.BUILD_TARGET == 'web-only' 
+                }
+            }
+            steps {
+                dir('packer') {
+                    withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                        sh """
+                        echo "Building Web tier AMI ${VERSION}..."
+                        packer build \
+                          -var="version=${VERSION}" \
+                          -var="color=green" \
+                          web-server.pkr.hcl
+                        
+                        # Extract AMI ID from manifest
+                        WEB_AMI=\$(jq -r '.builds[0].artifact_id' manifest-web-${VERSION}.json | cut -d: -f2)
+                        echo "Web AMI: \$WEB_AMI"
+                        echo "\$WEB_AMI" > web-ami-id.txt
+                        """
+                    }
+                }
+            }
+        }
+
+        /* ========== BUILD APP AMI ========== */
+        stage('Build App AMI') {
+            when {
+                expression { 
+                    params.BUILD_TARGET == 'both' || params.BUILD_TARGET == 'app-only' 
+                }
+            }
+            steps {
+                dir('packer') {
+                    withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                        sh """
+                        echo "Building App tier AMI ${VERSION}..."
+                        packer build \
+                          -var="version=${VERSION}" \
+                          app-server.pkr.hcl
+                        
+                        # Extract AMI ID from manifest
+                        APP_AMI=\$(jq -r '.builds[0].artifact_id' manifest-app-${VERSION}.json | cut -d: -f2)
+                        echo "App AMI: \$APP_AMI"
+                        echo "\$APP_AMI" > app-ami-id.txt
+                        """
+                    }
+                }
+            }
+        }
+
+        /* ========== UPDATE TERRAFORM CLOUD VARIABLES ========== */
+        stage('Update Terraform Cloud AMI Variables') {
+            steps {
+                dir('packer') {
+                    withCredentials([string(credentialsId: 'terraform-cloud-token', variable: 'TF_TOKEN')]) {
+                        script {
+                            def webAmi = null
+                            def appAmi = null
+
+                            // Read AMI IDs if files exist
+                            if (fileExists('web-ami-id.txt')) {
+                                webAmi = readFile('web-ami-id.txt').trim()
+                                echo "Web AMI ID: ${webAmi}"
+                            }
+                            if (fileExists('app-ami-id.txt')) {
+                                appAmi = readFile('app-ami-id.txt').trim()
+                                echo "App AMI ID: ${appAmi}"
+                            }
+
+                            // Update Terraform Cloud variables
+                            if (webAmi) {
+                                echo "Updating web_ami_id_green..."
+                                tfUpdateVar(env.TF_TOKEN, env.TF_WORKSPACE_ID, 
+                                    'web_ami_id_green', webAmi)
+                            }
+                            if (appAmi) {
+                                echo "Updating app_ami_id_green..."
+                                tfUpdateVar(env.TF_TOKEN, env.TF_WORKSPACE_ID, 
+                                    'app_ami_id_green', appAmi)
+                            }
+
+                            echo "✅ AMI variables updated in Terraform Cloud"
+                        }
+                    }
+                }
+            }
+        }
+
+        /* ========== VERIFY AMIS ========== */
+        stage('Verify AMIs') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws-deployment-credentials')]) {
+                    sh '''
+                    cd packer
+                    
+                    if [ -f web-ami-id.txt ]; then
+                      WEB_AMI=$(cat web-ami-id.txt)
+                      echo "Verifying Web AMI: $WEB_AMI"
+                      aws ec2 describe-images \
+                        --region ${AWS_REGION} \
+                        --image-ids $WEB_AMI \
+                        --query 'Images[0].[ImageId,State,Name]' \
+                        --output table
+                    fi
+                    
+                    if [ -f app-ami-id.txt ]; then
+                      APP_AMI=$(cat app-ami-id.txt)
+                      echo "Verifying App AMI: $APP_AMI"
+                      aws ec2 describe-images \
+                        --region ${AWS_REGION} \
+                        --image-ids $APP_AMI \
+                        --query 'Images[0].[ImageId,State,Name]' \
+                        --output table
+                    fi
+                    
+                    echo "✅ AMIs verified and available"
+                    '''
+                }
+            }
+        }
+
+    }
+
+    post {
+        success { 
+            echo "✅ AMI BUILD SUCCESSFUL"
+            echo "Built AMIs with version: ${params.VERSION}"
+            echo "AMIs are ready for deployment via main pipeline"
+        }
+        failure { 
+            echo "❌ AMI BUILD FAILED"
+        }
+        always {
+            // Archive manifest files
+            archiveArtifacts artifacts: 'packer/manifest-*.json', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'packer/*-ami-id.txt', allowEmptyArchive: true
+            cleanWs()
+        }
+    }
+}
