@@ -1,0 +1,96 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Packer
+packer_cache/
+*.box
+manifest-*.json
+manifest-*.json.lock
+packer-manifest.json
+ami-ids.txt
+*.log
+
+# AWS Credentials
+.aws/
+*.pem
+*.key
+
+# Documentation (ignore temporary guides)
+BUILD_DEPLOYMENT_GUIDE.md
+PACKER_IMPLEMENTATION.md
+USER_DATA_STRATEGY.md
+SECURITY_TESTING.md
+QUICK_START.md
+*.md
+!README.md
+!infrastructure_aws/README.md
+!infrastructure_aws/modules/README.md
+
+# Scripts (temporary test scripts)
+scripts/add-tfsec-ignores.ps1
+scripts/test-*.ps1
+scripts/test-*.sh
+scripts/rebuild-*.ps1
+scripts/rebuild-*.sh
+scripts/security-scan.ps1
+scripts/security-scan.sh
+scripts/security-tester.py
+scripts/security-tests.sh
+scripts/get-endpoints.py
+
+# Packer test scripts
+packer/test-*.ps1
+packer/build-all-amis.ps1
+packer/update-tf-vars.ps1
+
+# Backup folders
+backup_pre_refactor/
+*.backup
+*.bak
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jenkins
+.jenkins/
+jenkins-data/
+
+# Docker
+*.dockerignore
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+ENV/

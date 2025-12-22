@@ -19,7 +19,7 @@ resource "aws_launch_template" "web_blue" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_web.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_web_simple.sh.tftpl", {
     internal_alb_dns_name = var.internal_alb_dns_name
     project_name          = var.project_name
     environment           = "blue"
@@ -110,7 +110,7 @@ resource "aws_launch_template" "web_green" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_web.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_web_simple.sh.tftpl", {
     internal_alb_dns_name = var.internal_alb_dns_name
     project_name          = var.project_name
     environment           = "green"
@@ -201,13 +201,12 @@ resource "aws_launch_template" "app_blue" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_app.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_app_simple.sh.tftpl", {
     db_host      = var.db_host
     db_username  = var.db_username
     db_password  = var.db_password
     db_name      = var.db_name
     project_name = var.project_name
-    shop_url     = "http://${var.alb_dns_name}/"
     environment  = "blue"
   }))
 
@@ -296,13 +295,12 @@ resource "aws_launch_template" "app_green" {
     name = var.ec2_instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data_app.sh.tftpl", {
+  user_data = base64encode(templatefile("${path.module}/user_data_app_simple.sh.tftpl", {
     db_host      = var.db_host
     db_username  = var.db_username
     db_password  = var.db_password
     db_name      = var.db_name
     project_name = var.project_name
-    shop_url     = "http://${var.alb_dns_name}/"
     environment  = "green"
   }))
 

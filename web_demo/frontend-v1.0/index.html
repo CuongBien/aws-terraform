@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three-Tier App v1.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+            position: relative;
+        }
+        
+        .version-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .message-list {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 150px;
+        }
+        
+        .message-list ul {
+            list-style: none;
+        }
+        
+        .message-list li {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .error {
+            color: #e74c3c;
+            background: #ffe5e5;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .timestamp {
+            color: #999;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="version-badge" id="version-badge">v1.0 (Blue)</div>
+        
+        <h1>🏗️ Three-Tier Architecture</h1>
+        <p class="subtitle">AWS Infrastructure Demo - Version 1.0</p>
+        
+        <div class="info-box">
+            <strong>📍 You are viewing:</strong> Production version (Blue environment)
+        </div>
+        
+        <div class="section">
+            <h2>📨 Messages from Database</h2>
+            <div class="message-list" id="message-box">
+                <p class="loading">Loading messages...</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>✍️ Add New Message</h2>
+            <form id="message-form">
+                <div class="form-group">
+                    <label for="message">Your Message:</label>
+                    <input type="text" id="message" name="message" placeholder="Enter your message here" required>
+                </div>
+                <button type="submit">Send Message</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchMessages();
+            
+            const form = document.getElementById('message-form');
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const message = document.getElementById('message').value;
+                
+                fetch('api/save_message.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'message=' + encodeURIComponent(message)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('message').value = '';
+                        fetchMessages();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to save message');
+                });
+            });
+        });
+        
+        function fetchMessages() {
+            const messageBox = document.getElementById('message-box');
+            messageBox.innerHTML = '<p class="loading">Loading...</p>';
+            
+            fetch('api/get_messages.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.messages.length === 0) {
+                            messageBox.innerHTML = '<p style="color: #999;">No messages yet. Be the first to add one!</p>';
+                        } else {
+                            let html = '<ul>';
+                            data.messages.forEach(msg => {
+                                html += `<li>${msg.message}<span class="timestamp">${msg.created_at}</span></li>`;
+                            });
+                            html += '</ul>';
+                            messageBox.innerHTML = html;
+                        }
+                    } else {
+                        messageBox.innerHTML = '<p class="error">Error: ' + data.error + '</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageBox.innerHTML = '<p class="error">Failed to load messages. Check backend connectivity.</p>';
+                });
+        }
+    </script>
+</body>
+</html>

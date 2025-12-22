@@ -11,6 +11,9 @@
     <div class="container">
         <h1>Tech with Ajit</h1>
         <p>Basic Three-Tier Architecture Example</p>
+        <div id="version-badge" style="position: absolute; top: 10px; right: 10px; background: #007bff; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px;">
+            Loading version...
+        </div>
         
         <div class="message-container">
             <h2>Message from Database:</h2>
@@ -94,6 +97,20 @@
                     messageBox.innerHTML = '<p class="error">Failed to load messages</p>';
                 });
         }
+        
+        // Fetch version info
+        function fetchVersion() {
+            fetch('/version')
+                .then(response => response.text())
+                .then(version => {
+                    document.getElementById('version-badge').textContent = 'Version: ' + version.split('\n')[0];
+                })
+                .catch(() => {
+                    document.getElementById('version-badge').textContent = 'Version: Unknown';
+                });
+        }
+        
+        fetchVersion();
     </script>
 </body>
 </html>
