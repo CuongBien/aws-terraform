@@ -259,7 +259,7 @@ resource "aws_launch_template" "app_blue" {
 }
 
 resource "aws_autoscaling_group" "app_blue" {
-  name = "${var.project_name}-app-asg-blue"
+  name = "${var.project_name}-app-asg-blue-v3"
   
   launch_template {
     id      = aws_launch_template.app_blue.id
@@ -364,7 +364,7 @@ resource "aws_launch_template" "app_green" {
 }
 
 resource "aws_autoscaling_group" "app_green" {
-  name = "${var.project_name}-app-asg-green"
+  name = "${var.project_name}-app-asg-green-v3"
   
   launch_template {
     id      = aws_launch_template.app_green.id
