@@ -268,16 +268,23 @@ pipeline {
                       --names ${PROJECT_NAME}-web-tg-${params.DEPLOYMENT_TARGET} \
                       --query 'TargetGroups[0].TargetGroupArn' \
                       --output text)
-
-                    for i in {1..30}; do
+                    
+                    echo "⏳ Waiting for instances to become healthy (max 12 minutes)..."
+                    
+                    for i in {1..72}; do
                       HEALTHY=\$(aws elbv2 describe-target-health \
                         --region ${AWS_REGION} \
                         --target-group-arn \$TG_ARN \
                         --query 'TargetHealthDescriptions[?TargetHealth.State==`healthy`]|length(@)' \
                         --output text)
-                      [ "\$HEALTHY" -ge 1 ] && exit 0
+                      
+                      echo "Attempt \$i/72: \$HEALTHY healthy instances"
+                      
+                      [ "\$HEALTHY" -ge 1 ] && echo "✅ Health check passed!" && exit 0
                       sleep 10
                     done
+                    
+                    echo "❌ Timeout: No healthy instances after 12 minutes"
                     exit 1
                     """
                 }
