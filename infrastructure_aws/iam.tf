@@ -122,3 +122,40 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_managed_core" {
   role       = aws_iam_role.ec2_cloudwatch_agent_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
+
+# --- IAM Policy for ECR Access ---
+resource "aws_iam_policy" "ec2_ecr_read_policy" {
+  name        = "${var.project_name}-ec2-ecr-read-policy"
+  description = "Allows EC2 instances to pull Docker images from ECR"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ],
+        Resource = [
+          "arn:aws:ecr:ap-southeast-2:120915930136:repository/ecommerce-frontend",
+          "arn:aws:ecr:ap-southeast-2:120915930136:repository/ecommerce-backend"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach ECR policy to EC2 role
+resource "aws_iam_role_policy_attachment" "ec2_ecr_read_attachment" {
+  role       = aws_iam_role.ec2_cloudwatch_agent_role.name
+  policy_arn = aws_iam_policy.ec2_ecr_read_policy.arn
+}
