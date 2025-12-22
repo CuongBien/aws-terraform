@@ -130,8 +130,8 @@ resource "aws_lb" "internal" {
 
 # ===== APP TARGET GROUPS - BLUE/GREEN =====
 resource "aws_lb_target_group" "app_blue" {
-  name     = "${var.project_name}-app-blue-docker" 
-  port     = 8080
+  name     = "${var.project_name}-app-tg-blue" 
+  port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
   
@@ -152,8 +152,8 @@ resource "aws_lb_target_group" "app_blue" {
 }
 
 resource "aws_lb_target_group" "app_green" {
-  name     = "${var.project_name}-app-green-docker" 
-  port     = 8080
+  name     = "${var.project_name}-app-tg-green" 
+  port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
