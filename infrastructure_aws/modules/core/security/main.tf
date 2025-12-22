@@ -133,6 +133,16 @@ resource "aws_security_group_rule" "web_ingress_from_alb" {
   description              = "Allow HTTP/HTTPS from Public ALB"
 }
 
+resource "aws_security_group_rule" "web_ingress_8080_from_alb" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.web.id
+  description              = "Allow port 8080 from Public ALB for Docker containers"
+}
+
 resource "aws_security_group_rule" "web_ingress_ssh_from_bastion" {
   type                     = "ingress"
   from_port                = 22
@@ -193,6 +203,16 @@ resource "aws_security_group_rule" "app_ingress_from_internal_alb" {
   source_security_group_id = aws_security_group.internal_alb.id
   security_group_id        = aws_security_group.app.id
   description              = "Allow HTTP/HTTPS from Internal ALB"
+}
+
+resource "aws_security_group_rule" "app_ingress_8080_from_internal_alb" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.internal_alb.id
+  security_group_id        = aws_security_group.app.id
+  description              = "Allow port 8080 from Internal ALB for Docker containers"
 }
 
 resource "aws_security_group_rule" "app_ingress_ssh_from_bastion" {

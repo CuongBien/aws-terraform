@@ -29,7 +29,7 @@ pipeline {
         TF_WORKSPACE = 'aws-terraform'
 
         // Workspace ID là static → KHÔNG phải secret
-        TF_WORKSPACE_ID = 'ws-ZdCj4RaKxyFkwYuU'
+        TF_WORKSPACE_ID = 'ws-jSvvqiFbT7z6od5D'
 
         PREV_BLUE  = '100'
         PREV_GREEN = '0'

@@ -19,13 +19,13 @@ resource "aws_lb" "external" {
 
 # ===== WEB TARGET GROUPS - BLUE/GREEN =====
 resource "aws_lb_target_group" "web_blue" {
-  name     = "${var.project_name}-web-tg-blue"
-  port     = 80
+  name     = "${var.project_name}-web-v2-blue"
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
   lifecycle {
-    create_before_destroy = true
+    create_before_destroy = false
   }
 
   health_check {
@@ -33,25 +33,25 @@ resource "aws_lb_target_group" "web_blue" {
     interval            = 30
     path                = "/health"
     timeout             = 5
-    unhealthy_threshold = 2
+    unhealthy_threshold = 10
     healthy_threshold   = 2
     matcher             = "200-399"
   }
 
   tags = {
-    Name        = "${var.project_name}-web-tg-blue"
+    Name        = "${var.project_name}-web-v2-blue"
     Environment = "blue"
   }
 }
 
 resource "aws_lb_target_group" "web_green" {
-  name     = "${var.project_name}-web-tg-green"
-  port     = 80
+  name     = "${var.project_name}-web-v2-green"
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
   lifecycle {
-    create_before_destroy = true
+    create_before_destroy = false
   }
 
   health_check {
@@ -59,13 +59,13 @@ resource "aws_lb_target_group" "web_green" {
     interval            = 30
     path                = "/health"
     timeout             = 5
-    unhealthy_threshold = 2
+    unhealthy_threshold = 10
     healthy_threshold   = 2
     matcher             = "200-399"
   }
 
   tags = {
-    Name        = "${var.project_name}-web-tg-green"
+    Name        = "${var.project_name}-web-v2-green"
     Environment = "green"
   }
 }
