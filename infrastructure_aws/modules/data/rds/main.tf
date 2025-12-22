@@ -16,13 +16,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 # ===== RDS INSTANCE =====
-# Using existing RDS instance instead of creating new one
-data "aws_db_instance" "main" {
-  db_instance_identifier = "${var.project_name}-db"
-}
-
-# Commented out resource - RDS already exists
-/*
+# Recreate RDS instance
 #tfsec:ignore:aws-rds-enable-iam-auth # IAM auth is not required for this project
 resource "aws_db_instance" "main" {
   identifier             = "${var.project_name}-db"
@@ -68,4 +62,3 @@ resource "aws_db_instance" "main" {
     ]
   }
 }
-*/
