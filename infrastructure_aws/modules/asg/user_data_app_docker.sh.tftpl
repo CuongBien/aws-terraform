@@ -63,22 +63,24 @@ docker run -d \
   -e DB_NAME=$DB_NAME \
   -e PORT=3000 \
   -e NODE_ENV=production \
-  --log-driver=awslogs \
-  --log-opt awslogs-group="/aws/ec2/ecommerce/app" \
-  --log-opt awslogs-region=$AWS_REGION \
-  --log-opt awslogs-stream="$(ec2-metadata --instance-id | cut -d ' ' -f 2)" \
   $ECR_REGISTRY/ecommerce-backend:$BACKEND_IMAGE_TAG
+
+# Wait for app to start
+sleep 3
 
 # ===== 6. Health Check =====
 log "Waiting for container to be healthy..."
 for i in {1..30}; do
-  if docker exec ecommerce-backend node -e "require('http').get('http://localhost:3000/health',(r)=>process.exit(r.statusCode===200?0:1))" &>/dev/null; then
-    log "Backend container is healthy!"
+  if curl -f http://localhost:8080/health &>/dev/null || wget -q -O- http://localhost:8080/health &>/dev/null; then
+    log "✅ Backend container is healthy!"
     break
   fi
   log "Waiting for health check... ($i/30)"
   sleep 2
 done
+
+# Verify container is running
+docker ps -a --filter name=ecommerce-backend
 
 # ===== 7. Verify Database Initialization =====
 log "Verifying database schema..."
