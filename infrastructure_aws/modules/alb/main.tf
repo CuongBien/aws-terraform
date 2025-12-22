@@ -132,7 +132,7 @@ resource "aws_lb" "internal" {
 resource "aws_lb_target_group" "app_new" {
   for_each = toset(["blue", "green"])
   
-  name     = "${var.project_name}-app-${each.key}-8080"
+  name     = "${var.project_name}-app-v2-${each.key}"
   port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -142,14 +142,18 @@ resource "aws_lb_target_group" "app_new" {
     interval            = 30
     path                = "/health"
     timeout             = 5
-    unhealthy_threshold = 2
+    unhealthy_threshold = 10
     healthy_threshold   = 2
     matcher             = "200-399"
   }
 
   tags = {
-    Name        = "${var.project_name}-app-tg-${each.key}"
+    Name        = "${var.project_name}-app-v2-${each.key}"
     Environment = split("-", each.key)[0]
+  }
+  
+  lifecycle {
+    create_before_destroy = false
   }
 }
 
