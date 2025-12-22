@@ -131,7 +131,7 @@ resource "aws_lb" "internal" {
 # ===== APP TARGET GROUPS - BLUE/GREEN =====
 resource "aws_lb_target_group" "app_blue" {
   name     = "${var.project_name}-app-tg-blue" 
-  port     = 80
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
@@ -142,7 +142,7 @@ resource "aws_lb_target_group" "app_blue" {
   health_check {
     enabled             = true
     interval            = 30
-    path                = "/health.txt"
+    path                = "/health"
     timeout             = 5
     unhealthy_threshold = 2
     healthy_threshold   = 2
@@ -157,20 +157,18 @@ resource "aws_lb_target_group" "app_blue" {
 
 resource "aws_lb_target_group" "app_green" {
   name     = "${var.project_name}-app-tg-green" 
-  port     = 80
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
   lifecycle {
     create_before_destroy = true
   }
-  
+
   health_check {
     enabled             = true
     interval            = 30
-    path                = "/health.txt"
-    timeout             = 5
-    unhealthy_threshold = 2
+    path                = "/health"
     healthy_threshold   = 2
     matcher             = "200-399"
   }
