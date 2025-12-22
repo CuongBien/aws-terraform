@@ -243,7 +243,7 @@ variable "db_password" {
 variable "db_name" {
   description = "Initial database name"
   type        = string
-  default     = "opencart_db"
+  default     = "ecommerce"
 }
 
 variable "db_multi_az" {
