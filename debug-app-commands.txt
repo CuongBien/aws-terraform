@@ -1,0 +1,37 @@
+# SSH Command
+ssh -J ubuntu@3.107.1.103 ubuntu@10.0.21.121
+
+# Once connected, run these commands:
+
+# 1. Check Docker container status
+docker ps -a
+
+# 2. Check container logs (last 100 lines)
+docker logs ecommerce-backend --tail 100
+
+# 3. Check if container is listening on port 8080
+netstat -tlnp | grep 8080
+
+# 4. Test health endpoint from inside instance
+curl -v http://localhost:8080/health
+
+# 5. Check user-data execution logs
+sudo tail -100 /var/log/cloud-init-output.log
+
+# 6. Check if ECR login succeeded
+grep -i "login succeeded" /var/log/cloud-init-output.log
+
+# 7. Check environment variables passed to container
+docker inspect ecommerce-backend | grep -A 20 Env
+
+# 8. Test database connection from instance
+nc -zv ${DB_HOST} 3306
+
+# 9. Check if image was pulled successfully
+docker images | grep ecommerce-backend
+
+# 10. If container not running, try to start it manually
+docker start ecommerce-backend
+
+# 11. Check target group health check from ALB perspective
+curl -v http://localhost:8080/health -H "User-Agent: ELB-HealthChecker/2.0"
