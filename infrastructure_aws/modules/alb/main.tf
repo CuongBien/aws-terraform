@@ -129,8 +129,10 @@ resource "aws_lb" "internal" {
 }
 
 # ===== APP TARGET GROUPS - BLUE/GREEN =====
-resource "aws_lb_target_group" "app_blue_v3" {
-  name     = "${var.project_name}-app-blue-v3" 
+resource "aws_lb_target_group" "app_tg" {
+  for_each = toset(["blue-v3", "green-v3"])
+  
+  name     = "${var.project_name}-app-${each.key}"
   port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -146,28 +148,8 @@ resource "aws_lb_target_group" "app_blue_v3" {
   }
 
   tags = {
-    Name        = "${var.project_name}-app-tg-blue"
-    Environment = "blue"
-  }
-}
-
-resource "aws_lb_target_group" "app_green_v3" {
-  name     = "${var.project_name}-app-green-v3" 
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
-
-  health_check {
-    enabled             = true
-    interval            = 30
-    path                = "/health"
-    healthy_threshold   = 2
-    matcher             = "200-399"
-  }
-
-  tags = {
-    Name        = "${var.project_name}-app-tg-green"
-    Environment = "green"
+    Name        = "${var.project_name}-app-tg-${each.key}"
+    Environment = split("-", each.key)[0]
   }
 }
 
@@ -183,12 +165,12 @@ resource "aws_lb_listener" "internal_http" {
     
     forward {
       target_group {
-        arn    = aws_lb_target_group.app_blue_v3.arn
+        arn    = aws_lb_target_group.app_tg["blue-v3"].arn
         weight = var.traffic_distribution_blue
       }
 
       target_group {
-        arn    = aws_lb_target_group.app_green_v3.arn
+        arn    = aws_lb_target_group.app_tg["green-v3"].arn
         weight = var.traffic_distribution_green
       }
 
