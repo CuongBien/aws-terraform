@@ -80,7 +80,7 @@ module "rds" {
 
 # Application Load Balancer - Public and Internal ALBs
 module "alb" {
-  source = "./modules/edge/alb"
+  source = "./modules/alb"
 
   project_name           = var.project_name
   vpc_id                 = module.networking.vpc_id
