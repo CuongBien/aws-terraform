@@ -17,7 +17,7 @@ pipeline {
         AWS_REGION   = 'ap-southeast-2'
         PROJECT_NAME = 'pbl4-three-tier'
         TF_ORG       = 'CBien'
-        TF_WORKSPACE = 'aws-terraform-vcs'
+        TF_WORKSPACE = 'aws-terraform'
         TF_WORKSPACE_ID = 'ws-ZdCj4RaKxyFkwYuU'
     }
 

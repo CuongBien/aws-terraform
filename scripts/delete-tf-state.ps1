@@ -3,7 +3,7 @@
 
 $TF_TOKEN = "YOUR_TOKEN_HERE"
 $ORG = "CBien"
-$WORKSPACE = "aws-terraform-vcs"
+$WORKSPACE = "aws-terraform"
 
 # Get workspace ID
 $headers = @{

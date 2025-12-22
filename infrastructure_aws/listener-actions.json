@@ -1,0 +1,17 @@
+[
+  {
+    "Type": "forward",
+    "ForwardConfig": {
+      "TargetGroups": [
+        {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-southeast-2:120915930136:targetgroup/pbl4-three-tier-app-blue-8080/d7e958acc0add58c",
+          "Weight": 100
+        },
+        {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-southeast-2:120915930136:targetgroup/pbl4-three-tier-app-green-8080/b0610ce31aecaf5a",
+          "Weight": 0
+        }
+      ]
+    }
+  }
+]

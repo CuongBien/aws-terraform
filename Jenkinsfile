@@ -26,7 +26,7 @@ pipeline {
         IMAGE_TAG = 'latest'
 
         TF_ORG       = 'CBien'
-        TF_WORKSPACE = 'aws-terraform-vcs'
+        TF_WORKSPACE = 'aws-terraform'
 
         // Workspace ID là static → KHÔNG phải secret
         TF_WORKSPACE_ID = 'ws-ZdCj4RaKxyFkwYuU'

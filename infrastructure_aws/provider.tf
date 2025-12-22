@@ -9,7 +9,7 @@ terraform {
     organization = "CBien" 
     
     workspaces { 
-      name = "aws-terraform-vcs" 
+      name = "aws-terraform" 
     } 
   } 
 }
