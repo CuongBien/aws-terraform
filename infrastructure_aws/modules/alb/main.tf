@@ -129,10 +129,10 @@ resource "aws_lb" "internal" {
 }
 
 # ===== APP TARGET GROUPS - BLUE/GREEN =====
-resource "aws_lb_target_group" "app_tg" {
-  for_each = toset(["blue-v3", "green-v3"])
+resource "aws_lb_target_group" "app_new" {
+  for_each = toset(["blue", "green"])
   
-  name     = "${var.project_name}-app-${each.key}"
+  name     = "${var.project_name}-app-${each.key}-8080"
   port     = 8080
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -165,12 +165,12 @@ resource "aws_lb_listener" "internal_http" {
     
     forward {
       target_group {
-        arn    = aws_lb_target_group.app_tg["blue-v3"].arn
+        arn    = aws_lb_target_group.app_new["blue"].arn
         weight = var.traffic_distribution_blue
       }
 
       target_group {
-        arn    = aws_lb_target_group.app_tg["green-v3"].arn
+        arn    = aws_lb_target_group.app_new["green"].arn
         weight = var.traffic_distribution_green
       }
 
