@@ -18,9 +18,9 @@ log(){ echo "[app-user-data] $*"; }
 sudo systemctl enable --now httpd
 
 # ========= 2) Healthcheck file =========
-echo "ok" | sudo tee /var/www/html/health.php >/dev/null
-sudo chown apache:apache /var/www/html/health.php
-sudo chmod 644 /var/www/html/health.php
+echo "ok" | sudo tee /var/www/html/health.txt >/dev/null
+sudo chown apache:apache /var/www/html/health.txt
+sudo chmod 644 /var/www/html/health.txt
 
 # ========= 3) Update DB connection config =========
 # Tạo config file cho backend API để kết nối DB
