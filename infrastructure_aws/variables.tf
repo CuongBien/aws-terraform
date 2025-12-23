@@ -205,7 +205,7 @@ variable "bastion_root_volume_size" {
 variable "bastion_allowed_cidrs" {
   description = "List of CIDR blocks allowed to SSH to bastion"
   type        = list(string)
-  # default     = ["0.0.0.0/0"]
+  default     = ["117.2.255.206/32"]
 }
 
 # ===== DATABASE CONFIGURATION =====cd 
